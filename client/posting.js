@@ -73,7 +73,7 @@ function insert_pbs() {
 		return;
 	if (THREAD ? $('aside').length : $ceiling.next().is('aside'))
 		return;
-	make_reply_box().appendTo('section');
+	make_reply_box().insertBefore('div.clearfix');
 	if (!nashi.upload && (BUMP || PAGE == 0))
 		$ceiling.after('<aside class="act"><a>New thread</a></aside>');
 }
