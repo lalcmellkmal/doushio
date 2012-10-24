@@ -167,7 +167,7 @@ function write_thread_html(reader, req, response, opts) {
 		response.write(oneeSama.mono(post));
 	});
 	reader.on('endthread', function () {
-		response.write('<div class="clearfix"></div</section><hr>\n');
+		response.write('<div class="clearfix"></div></section><hr>\n');
 	});
 }
 
