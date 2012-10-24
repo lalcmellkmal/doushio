@@ -1,3 +1,6 @@
+div.clearfix {
+  clear:both;
+}
 a {
 	border: none;
 	text-decoration: underline;
