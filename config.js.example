@@ -38,6 +38,13 @@ var config = {
 	IP_MNEMONIC: true,
 
 	VOICE_PATH: 'voice',
+
+    EIGHT_BALL: [
+        "Yes",
+        "No",
+        "Maybe",
+        "Ara ara",
+    ],
 };
 
 module.exports = config;
