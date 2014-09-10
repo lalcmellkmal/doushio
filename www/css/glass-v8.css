@@ -1,0 +1,68 @@
+/* Based on ashita */
+a, blockquote a:hover, b.moderator {
+	color: Lavender;
+}
+article, aside, .pagination, .popup-menu, .modal, #FAQ, .preview, #banner, #banner_info {
+	background-color: rgba(40, 42, 46, 0.5);
+}
+article.editing {
+	background-color: rgba(145, 145, 145, 0.5);
+}
+blockquote, time, #FAQ {
+	color: white;
+}
+b.admin {
+	color: #f00000;
+}
+body {
+    color:white;
+    background-color: rgba(40, 42, 46, 0.5);
+}
+body, pre, .themed {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 10pt;
+}
+em {
+	color: #b5bd68;
+}
+.embed, .embed:hover {
+	color: black;
+}
+h1 {
+	font: bolder 28px Tahoma;
+	letter-spacing: -2px;
+}
+h2 {
+	font-family: Tahoma;
+}
+h3 {
+	color: #ce52c9;
+}
+hr {
+	border-top: 1px solid #282a2e;
+}
+.act:before {
+	content: "[";
+}
+.act:after {
+	content: "]";
+}
+#lock, .scroll-lock header {
+	background-image: url('ui/invlock.png');
+	color: white;
+}
+.popup-menu li:hover {
+	background-color: rgba(40, 42, 46, 0.6);
+}
+.themed {
+	color: white;
+}
+
+@media screen and (-webkit-min-device-pixel-ratio: 1.5),
+	screen and (-o-device-pixel-ratio: 3/2),
+	screen and (min--moz-device-pixel-ratio: 1.5),
+	screen and (min-device-pixel-ratio: 1.5) {
+	#lock, .scroll-lock header {
+		background-image: url('ui/invlock2x.png');
+	}
+}
