@@ -73,9 +73,9 @@ exports.write_thread_html = function (reader, req, out, opts) {
 
 function make_link_rels(board, bits) {
 	var path = imager.config.MEDIA_URL + 'css/';
-	bits.push(['stylesheet', path + STATE.hot.BASE_CSS]);
-	bits.push(['stylesheet', path + STATE.hot.BOARD_CSS[board], 'theme']);
-	bits.push(['stylesheet', path + 'gravitas-v1.css']);
+	bits.push(['stylesheet', path + 'base-v' + config.BASE_CSS_VERSION + '.css']);
+	bits.push(['stylesheet', path + STATE.hot.BOARD_CSS[board]  + '-v' + config.THEME_CSS_VERSION + '.css', 'theme']);
+	bits.push(['stylesheet', path + 'gravitas-v' + config.GRAVITAS_CSS_VERSION + '.css']);
 	return bits.map(function (p) {
 		var html = '\t<link rel="'+p[0]+'" href="'+p[1]+'"';
 		if (p[2])

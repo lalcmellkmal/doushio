@@ -37,6 +37,22 @@ var config = {
 	LOGIN_COOKIE_DOMAIN: 'example.com',
 	LOGIN_SESSION_TIME: 60*60*24*14,
 	IP_MNEMONIC: true,
+	
+	BASE_CSS_VERSION: 42,
+	THEME_CSS_VERSION: 8,
+	MOD_CSS_VERSION: 1,
+	GRAVITAS_CSS_VERSION: 1,
+	THEMES: [
+		'moe',
+		'gar',
+		'mawaru',
+		'moon',
+		'ashita',
+		'console',
+		'tea',
+		'higan'
+	],
+	
 
 	VOICE_PATH: 'voice',
 };

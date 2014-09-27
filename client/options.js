@@ -117,18 +117,6 @@ options.on('change:lastn', function (model, lastN) {
 
 /* THEMES */
 
-var themes = [
-	'moe',
-	'gar',
-	'mawaru',
-	'moon',
-	'ashita',
-	'console',
-	'tea',
-	'higan',
-];
-var globalVersion = 8;
-
 function option_theme(theme) {
 	if (theme) {
 		var css = theme + '-v' + globalVersion + '.css';
