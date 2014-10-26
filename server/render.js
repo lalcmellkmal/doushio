@@ -25,6 +25,8 @@ exports.write_thread_html = function (reader, req, out, opts) {
 	caps.augment_oneesama(oneeSama, opts);
 
 	var cookies = web.parse_cookie(req.headers.cookie);
+	if (cookies.rTime == 'true')
+		oneeSama.rTime = true;
 	if (common.thumbStyles.indexOf(cookies.thumb) >= 0)
 		oneeSama.thumbStyle = cookies.thumb;
 
