@@ -37,6 +37,7 @@ if (window.devicePixelRatio > 1)
 	optSpecs.push(option_high_res);
 optSpecs.push(option_thumbs);
 optSpecs.push(option_image_hover);
+optSpecs.push(option_webm_hover);
 optSpecs.push(option_backlinks);
 optSpecs.push(option_reply_at_right);
 optSpecs.push(option_theme);
@@ -263,17 +264,23 @@ var load_thread_backlinks = function ($section) {
 
 /* IMAGE HOVER EXPANSION */
 
+var allow_webm_hover = false;
+
 function option_image_hover(toggle){
 	function preview(){
 		// Check if hovering over image or image is expanded by clicking
-		if (!$(target).is('img, video') || $(target).closest('figure').hasClass('expanded'))
+		if (!$(target).is('img') || $(target).closest('figure').hasClass('expanded'))
 			return fadeout();
 		var src = $(target).closest('a').attr('href');
 		var oldSrc = $('#hover_overlay_image').attr('src');
 		// Do nothing, if still hovering the same image
 		if (src == oldSrc)
 			return;
-		var tag =  /\.webm/i.test(src) ? '<video />' : '<img />';
+		var isWebm = /\.webm/i.test(src);
+		// Check if WebM hover expansion is enabled
+		if (isWebm && !allow_webm_hover)
+			return fadeout();
+		var tag =  isWebm ? '<video />' : '<img />';
 		var html  = $(tag, {
 			id: 'hover_overlay_image',
 			'src': src,
@@ -321,6 +328,15 @@ function option_image_hover(toggle){
 option_image_hover.id = 'imageHover';
 option_image_hover.label = 'Image Hover Expansion';
 option_image_hover.type = 'checkbox';
+
+// Toogle hover expansion of WebM
+function option_webm_hover(toggle){
+	allow_webm_hover = toggle;
+}
+
+option_webm_hover.id = 'webmHover';
+option_webm_hover.label = 'WebM Hover Expansion';
+option_webm_hover.type = 'checkbox';
 
 /* INLINE EXPANSION */
 
