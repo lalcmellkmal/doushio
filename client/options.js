@@ -37,6 +37,7 @@ if (window.devicePixelRatio > 1)
 	optSpecs.push(option_high_res);
 optSpecs.push(option_thumbs);
 optSpecs.push(option_backlinks);
+optSpecs.push(option_notification);
 optSpecs.push(option_reply_at_right);
 optSpecs.push(option_theme);
 optSpecs.push(option_last_n);
@@ -259,6 +260,17 @@ var load_thread_backlinks = function ($section) {
 		add_post_links(src, update, op);
 	});
 };
+
+/* NOTIFICATIONS */
+
+function option_notification(notifToggle) {
+	if(notifToggle && (Notification.permission !== "granted"))
+		Notification.requestPermission();
+}
+
+option_notification.id = 'notification';
+option_notification.label = 'Desktop Notifications';
+option_notification.type = 'checkbox';
 
 /* INLINE EXPANSION */
 
