@@ -39,6 +39,8 @@ optSpecs.push(option_thumbs);
 optSpecs.push(option_backlinks);
 optSpecs.push(option_reply_at_right);
 optSpecs.push(option_theme);
+optSpecs.push(option_user_bg);
+optSpecs.push(option_user_bg_image);
 optSpecs.push(option_last_n);
 
 
@@ -126,6 +128,7 @@ var themes = [
 	'console',
 	'tea',
 	'higan',
+	'glass'
 ];
 var globalVersion = 8;
 
@@ -134,7 +137,9 @@ function option_theme(theme) {
 		var css = theme + '-v' + globalVersion + '.css';
 		$('#theme').attr('href', mediaURL + 'css/' + css);
 	}
+	append_glass();
 }
+
 option_theme.id = 'board.$BOARD.theme';
 option_theme.label = 'Theme';
 option_theme.type = themes;
@@ -259,6 +264,84 @@ var load_thread_backlinks = function ($section) {
 		add_post_links(src, update, op);
 	});
 };
+
+/* CUSTOM USER-SET BACKGROUND */
+
+function option_user_bg(toggle){
+	if (options.get(option_user_bg_image.id) != '' && toggle){
+		var image = options.get(option_user_bg_image.id);		
+		$('body').append($('<img />', {
+			id: 'user_bg',
+			src: image
+		}));
+		
+		// Append transparent BG, if theme is glass
+		append_glass();
+	} else
+		clear_bg();
+}
+
+function clear_bg(){
+	$('#user_bg').remove();
+	$('#blurred').remove();
+}
+
+option_user_bg.id = 'board.$BOARD.userBG';
+option_user_bg.label = 'Custom Background';
+option_user_bg.type = 'checkbox';
+
+// Generate a new blurred BG on BG change
+function option_user_bg_image(image){
+	if (image == '')
+		clear_bg();
+	 else if (image != options.get(BOARD + '.BGCached')){
+		var img = new Image();
+		img.src = image;
+		img.onload = function(){
+			// Prevent memory leaks
+			$(this).remove();
+			// Blur with Pixastic and write to localstorage
+			Pixastic.process(img, 'blurfast', {amount: 1.5}, function(blurred){
+				localStorage.setItem(BOARD + '.BGBlurred', blurred.toDataURL('image/jpeg', 0.9));
+				options.set(BOARD + '.BGCached', image);
+				if (options.get(option_user_bg.id))
+					option_user_bg(true);
+				append_glass();
+			});
+		};
+	} else
+		append_glass();
+}
+
+function append_glass(){
+	// Check if theme is glass, user-bg is set and blurred BG is generated
+	if (options.get(option_theme.id) == 'glass' &&
+		options.get(option_user_bg_image.id) != '' &&
+		options.get(option_user_bg.id) &&
+		localStorage.getItem(BOARD + '.BGBlurred')){
+			// Apply blurred background
+			var blurred = localStorage.getItem(BOARD + '.BGBlurred');
+			var bg = 'url(' + blurred + ') center fixed no-repeat; background-size: cover;}' ;
+			$('#blurred').remove();
+			$('<style />', {id: 'blurred'})
+				.appendTo('body')
+				.html(
+					'article, aside, .pagination, .popup-menu, .modal, .preview, #banner {\
+						background:\
+							linear-gradient(rgba(40, 42, 46, 0.5), rgba(40, 42, 46, 0.5)),' +
+							bg +
+					'article.editing{\
+						background:\
+							linear-gradient(rgba(145, 145, 145, 0.5), rgba(145, 145, 145, 0.5)),' +
+							bg
+				);
+	} else
+		$('#blurred').remove();
+}
+
+option_user_bg_image.id = 'board.$BOARD.userBGimage';
+option_user_bg_image.label = ' ';
+option_user_bg_image.type = 'image';
 
 /* INLINE EXPANSION */
 
@@ -568,6 +651,11 @@ function make_options_panel() {
 			val = !$o.prop('checked');
 		else if (spec.type == 'positive')
 			val = Math.max(parseInt($o.val(), 10), 1);
+		else if (spec.type == 'image'){
+			var trimmed = $o.val().trim();
+			if (/^$|\.(jpe?g|png|gif)$/i.test(trimmed))
+				val = trimmed;
+		}
 		else
 			val = $o.val();
 		options.set(id, val);
@@ -590,6 +678,11 @@ function make_options_panel() {
 				width: '4em',
 				maxlength: 4,
 				val: val,
+			});
+		} else if (type == 'image'){
+			$input = $('<input />', {
+				placeholder: mediaURL + 'src/*',
+				val: val
 			});
 		}
 		else if (type instanceof Array) {

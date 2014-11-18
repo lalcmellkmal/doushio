@@ -168,6 +168,18 @@ section #banner {
 	margin-top: 1em;
 	text-align: left;
 }
+#user_bg {
+	position: fixed;
+	top: -100%;
+	left: 0;
+	right: 0;
+	bottom: -100%;
+	width: 100%;
+	height: auto;
+	z-index: -100;
+	overflow: hidden;
+	margin: auto;
+}
 .email {
 	text-decoration: underline;
 }
