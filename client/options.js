@@ -36,6 +36,8 @@ optSpecs.push(option_inline_expansion);
 if (window.devicePixelRatio > 1)
 	optSpecs.push(option_high_res);
 optSpecs.push(option_thumbs);
+optSpecs.push(option_image_hover);
+optSpecs.push(option_webm_hover);
 optSpecs.push(option_backlinks);
 optSpecs.push(option_reply_at_right);
 optSpecs.push(option_theme);
@@ -259,6 +261,82 @@ var load_thread_backlinks = function ($section) {
 		add_post_links(src, update, op);
 	});
 };
+
+/* IMAGE HOVER EXPANSION */
+
+var allow_webm_hover = false;
+
+function option_image_hover(toggle){
+	function preview(){
+		// Check if hovering over image or image is expanded by clicking
+		if (!$(target).is('img') || $(target).closest('figure').hasClass('expanded'))
+			return fadeout();
+		var src = $(target).closest('a').attr('href');
+		var oldSrc = $('#hover_overlay_image').attr('src');
+		// Do nothing, if still hovering the same image
+		if (src == oldSrc)
+			return;
+		var isWebm = /\.webm/i.test(src);
+		// Check if WebM hover expansion is enabled
+		if (isWebm && !allow_webm_hover)
+			return fadeout();
+		var tag =  isWebm ? '<video />' : '<img />';
+		var html  = $(tag, {
+			id: 'hover_overlay_image',
+			'src': src,
+			autoplay: '',
+			loop: ''
+		});
+		// Gracefully fade out previous image
+		if ($('#hover_overlay_image').length){
+				$('#hover_overlay_image').fadeOut({duration: 200, complete: function(){
+					fadein(html);
+			}});
+		} else
+			fadein(html);
+	}
+	
+	function fadein(html){
+		$('#hover_overlay').html(html);
+		$('#hover_overlay_image').fadeIn({duration: 200});
+	}
+	
+	function fadeout(){
+		// Do nothing, if image is already removed
+		if ($('#hover_overlay_image').length){
+			$('#hover_overlay_image').fadeOut({duration: 200, complete: function(){
+				$('#hover_overlay_image').remove();
+				// More responsive transition with fast pouinter movements
+				preview();
+			}});
+		}
+	}
+	
+	// Currently hovered over element
+	var target;
+	
+	if (toggle){
+		$DOC
+			.on('mouseover', function(e){
+				target = e.target;
+			})
+			.on('mousemove', preview)
+			.on('click', 'img, video', fadeout);
+	}
+}
+
+option_image_hover.id = 'imageHover';
+option_image_hover.label = 'Image Hover Expansion';
+option_image_hover.type = 'checkbox';
+
+// Toogle hover expansion of WebM
+function option_webm_hover(toggle){
+	allow_webm_hover = toggle;
+}
+
+option_webm_hover.id = 'webmHover';
+option_webm_hover.label = 'WebM Hover Expansion';
+option_webm_hover.type = 'checkbox';
 
 /* INLINE EXPANSION */
 
