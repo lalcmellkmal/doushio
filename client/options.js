@@ -127,7 +127,6 @@ var themes = [
 	'tea',
 	'higan',
 ];
-var globalVersion = 8;
 
 function option_theme(theme) {
 	if (theme) {
