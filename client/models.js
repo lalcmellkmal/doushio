@@ -30,6 +30,16 @@ function model_link(key) {
 	};
 }
 
+function renderRelativeTime(){
+	if (oneeSama.rTime){
+		var $time = this.$('header').find('time').first();
+		var t = date_from_time_el($time[0]).getTime();
+		setInterval(function(){
+			$time.html(oneeSama.relative_time(t, new Date().getTime()));
+		}, 60000);
+	}
+}
+
 var Section = Backbone.View.extend({
 	tagName: 'section',
 
@@ -39,6 +49,7 @@ var Section = Backbone.View.extend({
 			'change:locked': this.renderLocked,
 			'change:spoiler': this.renderSpoiler,
 			destroy: this.remove,
+			'add': renderRelativeTime,
 		});
 		this.listenTo(this.model.get('replies'), {
 			remove: this.removePost,
@@ -88,7 +99,9 @@ var Article = Backbone.View.extend({
 			'change:image': this.renderImage,
 			'change:spoiler': this.renderSpoiler,
 			'removeSelf': this.remove,
+			'add': renderRelativeTime,
 		});
+		Backbone.once('extracted', renderRelativeTime, this);
 	},
 
 	render: function () {

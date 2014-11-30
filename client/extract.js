@@ -89,6 +89,7 @@ function scan_threads_for_extraction() {
 		threads.push(thread);
 	}
 	Threads.add(threads);
+	Backbone.trigger('extracted');
 }
 
 scan_threads_for_extraction();
