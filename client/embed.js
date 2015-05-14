@@ -103,8 +103,11 @@ $(document).on('mouseenter', '.watch', function (event) {
 		return;
 
 	$.ajax({
-		url: '//gdata.youtube.com/feeds/api/videos/' + m[2],
-		data: {v: '2', alt: 'jsonc'},
+		url: 'https://www.googleapis.com/youtube/v3/videos',
+		data: {id: m[2],
+		       key: config.GOOGLE_API_KEY,
+		       part: 'snippet,status',
+		       fields: 'items(snippet(title),status(embeddable))'},
 		dataType: 'json',
 		success: function (data) {
 			with_dom(gotInfo.bind(null, data));
@@ -117,7 +120,8 @@ $(document).on('mouseenter', '.watch', function (event) {
 	});
 
 	function gotInfo(data) {
-		var title = data && data.data && data.data.title;
+		var title = data && data.items && data.items[0].snippet &&
+				data.items[0].snippet.title;
 		if (title) {
 			node.textContent = orig + ': ' + title;
 			$target.css({color: 'black'});
@@ -125,8 +129,8 @@ $(document).on('mouseenter', '.watch', function (event) {
 		else
 			node.textContent = orig + ' (gone?)';
 
-		if (data && data.data && data.data.accessControl &&
-				data.data.accessControl.embed == 'denied') {
+		if (data && data.items && data.items[0].status &&
+			data.items[0].status.embeddable == false) {
 			node.textContent += ' (EMBEDDING DISABLED)';
 			$target.data('noembed', true);
 		}

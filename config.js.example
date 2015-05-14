@@ -38,6 +38,10 @@ var config = {
 	LOGIN_SESSION_TIME: 60*60*24*14,
 	IP_MNEMONIC: true,
 
+	// API key with Youtube Data API v3 (browser) access
+	// obtain from https://console.developers.google.com
+	GOOGLE_API_KEY: '',
+
 	VOICE_PATH: 'voice',
 };
 
