@@ -7,9 +7,9 @@
 		'sources': ['tripcode.cc'],
 		'link_settings': {
 			'conditions': [
-				['OS=="linux"', {'libraries': ['-lcrypt']}],
-				['OS=="freebsd"', {'libraries': ['-lcrypt']}],
-				['OS=="mac"', {'libraries': ['-lcrypto']}]
+				['OS=="linux"', {'libraries': ['-lcrypt', '-liconv']}],
+				['OS=="freebsd"', {'libraries': ['-lcrypt', '-liconv']}],
+				['OS=="mac"', {'libraries': ['-lcrypto', '-liconv']}]
 			]
 		}
 	}]

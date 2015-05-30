@@ -16,4 +16,4 @@ def build(bld):
     # uselib doesn't seem to work
     import platform
     crypt = 'crypto' if platform.system() == 'Darwin' else 'crypt'
-    obj.env.append_value('LINKFLAGS', '-l' + crypt)
+    obj.env.append_value('LINKFLAGS', '-liconv -l' + crypt)
