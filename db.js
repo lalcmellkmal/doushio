@@ -1800,3 +1800,4 @@ function hmget_obj(r, key, keys, cb) {
 		cb(null, result);
 	});
 }
+

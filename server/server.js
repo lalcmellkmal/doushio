@@ -28,6 +28,10 @@ if (!imager.is_standalone())
 	require('../imager/daemon'); // preload and confirm it works
 if (config.CURFEW_BOARDS)
 	require('../curfew/server');
+if (config.ANON_HOURS){
+	var ah = require('../anon_hours/server');
+	ah.ah_init();
+}
 try {
 	var reportConfig = require('../report/config');
 	if (reportConfig.RECAPTCHA_PUBLIC_KEY)
@@ -757,8 +761,16 @@ function allocate_post(msg, client, callback) {
 			post.subject = subject;
 	}
 
+	if(config.ANON_HOURS){
+		var anon_hour = ah.anon_hour;
+		if (msg.name)
+			ah.name_parse(msg.name);
+		if (ah.random_name_hour)
+			ah.random_name(post);
+	}
+
 	/* TODO: Check against client.watching? */
-	if (msg.name) {
+	if (msg.name && !anon_hour) {
 		var parsed = common.parse_name(msg.name);
 		post.name = parsed[0];
 		var spec = STATE.hot.SPECIAL_TRIPCODES;
