@@ -237,9 +237,22 @@ StillJob.prototype.perform_job = function () {
 		/* Could have false positives due to chapter titles. Bah. */
 		var has_audio = /audio:\s*vorbis/i.test(stderr);
 
+		// Parse webm length
+		var length;
+		var l = stderr.match(/Duration: (\d{2}:\d{2}:\d{2})/);
+		if (l){
+			var h = l[1].slice(0, 3);
+			var m = l[1].slice(3,6);
+			var s = l[1].slice(6) + 's';
+			h = (h == '00:') ? '' : h.replace(':', 'h');
+			m = (m == '00:') ? '' : m.replace(':', 'm');
+			length = h + m + s;
+		}
+
 		self.finish_job(null, {
 			still_path: dest,
 			has_audio: has_audio,
+			length: length,
 		});
 	});
 };
@@ -269,6 +282,8 @@ IU.verify_webm = function (err, info) {
 			if (config.WEBM_AUDIO_SPOILER)
 				image.spoiler = config.WEBM_AUDIO_SPOILER;
 		}
+		if (info.length)
+			image.length = info.length;
 
 		self.verify_image();
 	});
