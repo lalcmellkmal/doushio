@@ -11,21 +11,25 @@ using namespace v8;
 static char SECURE_SALT[21] = "$5$";
 #define TRIP_MAX 128
 
-static NAN_METHOD(setup_callback) {
-	NanScope();
-
-	if (args.Length() != 1)
-		NanReturnValue(false);
-	NanUtf8String saltVal(args[0]);
-	if (saltVal.length() != 16)
-		NanReturnValue(false);
+void set_salt(const Nan::FunctionCallbackInfo<Value>& info) {
+	if (info.Length() != 1) {
+		Nan::ThrowTypeError("setSalt takes one argument");
+		return;
+	}
+	Nan::Utf8String saltVal(info[0]);
+	if (saltVal.length() != 16) {
+		Nan::ThrowTypeError("setSalt takes a string of length 16");
+		return;
+	}
 	char *salt = *saltVal;
-	if (!salt)
-		NanReturnValue(false);
+	if (!salt) {
+		Nan::ThrowTypeError("setSalt read a null string?!");
+		return;
+	}
 	memcpy(SECURE_SALT + 3, salt, 16);
 	SECURE_SALT[19] = '$';
 	SECURE_SALT[20] = 0;
-	NanReturnValue(true);
+	info.GetReturnValue().Set(true);
 }
 
 static void fix_char(char &c) {
@@ -93,7 +97,7 @@ static int setup_conv() {
 
 typedef void (*trip_f)(char *, size_t, char *);
 
-static void with_SJIS(NanUtf8String &trip, trip_f func, char *ret) {
+static void with_SJIS(Nan::Utf8String &trip, trip_f func, char *ret) {
 	char *src = *trip;
 	if (!src)
 		return;
@@ -116,26 +120,29 @@ static void with_SJIS(NanUtf8String &trip, trip_f func, char *ret) {
 	}
 }
 
-NAN_METHOD(hash_callback) {
-	NanScope();
-	if (args.Length() != 2)
-		NanReturnNull();
+void hash(const Nan::FunctionCallbackInfo<Value>& info) {
+	if (info.Length() != 2) {
+		Nan::ThrowTypeError("hash takes 2 arguments");
+		return;
+	}
 
-	NanUtf8String trip(args[0]), secure(args[1]);
+	Nan::Utf8String trip(info[0]), secure(info[1]);
 	char digest[24];
 	digest[0] = 0;
 	with_SJIS(trip, &hash_trip, digest);
 	with_SJIS(secure, &hash_secure, digest + strlen(digest));
-	NanReturnValue(NanNew<String>(digest));
+
+	Local<String> digest_str = Nan::New(digest).ToLocalChecked();
+	info.GetReturnValue().Set(digest_str);
 }
 
-extern "C" void init(Handle<Object> target) {
+void init(Local<Object> exports) {
 	if (!setup_conv())
 		return;
-	target->Set(NanNew<String>("setSalt"),
-			NanNew<FunctionTemplate>(&setup_callback)->GetFunction());
-	target->Set(NanNew<String>("hash"),
-		NanNew<FunctionTemplate>(&hash_callback)->GetFunction());
+	exports->Set(Nan::New("setSalt").ToLocalChecked(),
+			Nan::New<FunctionTemplate>(set_salt)->GetFunction());
+	exports->Set(Nan::New("hash").ToLocalChecked(),
+		Nan::New<FunctionTemplate>(hash)->GetFunction());
 }
 
 NODE_MODULE(tripcode, init)

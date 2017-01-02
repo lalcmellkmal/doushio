@@ -14,22 +14,21 @@
 		"start": "node server/server.js"
 	},
 	"dependencies": {
-		"async": "0.2.9",
-		"formidable": "1.0.14",
-		"minimist": "0.2.0",
-		"nan": "1.8.4",
-		"recaptcha": "1.2.0",
-		"redis": "0.8.4",
-		"request": "2.27",
-		"sockjs": "0.3.7",
-		"tmp": "0.0.21",
-		"uglify-js": "2.4.0",
-		"winston": "0.7.2"
+		"async": "2.1.4",
+		"formidable": "1.0.17",
+		"minimist": "1.2.0",
+		"nan": "2.5.0",
+		"recaptcha": "1.2.1",
+		"redis": "2.6.3",
+		"request": "2.79",
+		"sockjs": "0.3.18",
+		"tmp": "0.0.31",
+		"uglify-js": "2.7.5",
+		"winston": "2.3.0"
 	},
 	"optionalDependencies": {
-		"hiredis": "0.1.15",
-		"node-expat": "2.0.0",
-		"nodemailer": "0.5.2",
-		"send": "0.1.4"
+		"node-expat": "2.3.15",
+		"nodemailer": "2.7.0",
+		"send": "0.14.1"
 	}
 }

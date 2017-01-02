@@ -555,6 +555,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 		else
 			view.imgctr = 1;
 		note_hash(m, msg.image.hash, msg.num);
+		view.dims = view.dims.toString();
 	}
 	m.hmset(key, view);
 	m.set(key + ':body', body);
@@ -1088,7 +1089,12 @@ Y.add_image = function (post, alloc, ip, callback) {
 	function add_it() {
 		var m = r.multi();
 		note_hash(m, image.hash, post.num);
+		// HACK: hmset doesn't like our array, but we need it
+		var orig_dims = image.dims;
+		image.dims = orig_dims.toString();
 		m.hmset(key, image);
+		image.dims = orig_dims;
+
 		m.hincrby('thread:' + op, 'imgctr', 1);
 
 		delete image.hash;

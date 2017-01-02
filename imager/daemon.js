@@ -101,10 +101,11 @@ IU.handle_request = function (req, resp) {
 	if (len > 0 && len > config.IMAGE_FILESIZE_MAX + (20*1024))
 		return this.failure(Muggle('File is too large.'));
 
-	var form = new formidable.IncomingForm();
-	form.uploadDir = config.MEDIA_DIRS.tmp;
-	form.maxFieldsSize = 50 * 1024;
-	form.hash = 'md5';
+	var form = new formidable.IncomingForm({
+		uploadDir: config.MEDIA_DIRS.tmp,
+		maxFieldsSize: 50 * 1024,
+		hash: 'md5',
+	});
 	form.onPart = function (part) {
 		if (part.filename && part.name == 'image')
 			form.handlePart(part);
@@ -543,7 +544,11 @@ function perceptual_hash(src, image, callback) {
 		var bin = path.join(__dirname, 'perceptual');
 		child_process.execFile(bin, [tmp],
 					function (err, stdout, stderr) {
-			fs.unlink(tmp);
+			fs.unlink(tmp, function (err) {
+				if (err)
+					winston.warn("Deleting " +
+						tmp + ": " + err);
+			});
 			if (err)
 				return callback(Muggle('Hashing error.',
 						stderr || err));
