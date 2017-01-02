@@ -1,12 +1,13 @@
 /* YOUTUBE */
 
-var youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m.)?youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?(#t=[\dhms]{1,9})?/;
+var youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m.)?(?:youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?(#t=[\dhms]{1,9})?|(?:|youtu\.be\/)([\w-]{11})(?:\?)?(t=[\dhms]{1,9})?)/;
 var youtube_time_re = /^#t=(?:(\d\d?)h)?(?:(\d{1,3})m)?(?:(\d{1,3})s)?$/;
 
 function make_video(id, params, start) {
 	if (!params)
 		params = {allowFullScreen: 'true'};
 	params.allowScriptAccess = 'always';
+	//settings of the video
 	var query = {
 		autohide: 1,
 		fs: 1,
@@ -26,6 +27,7 @@ function make_video(id, params, start) {
 
 	var uri = encodeURI('https://www.youtube.com/embed/' + id) + '?' +
 			$.param(query);
+	//makes the video
 	return $('<iframe></iframe>', {
 		type: 'text/html', src: uri,
 		frameborder: '0',
@@ -33,14 +35,14 @@ function make_video(id, params, start) {
 		"class": 'youtube-player',
 	});
 }
-
+//dimensions of the video
 function video_dims() {
 	if (window.screen && screen.width <= 320)
 		return {width: 250, height: 150};
 	else
 		return {width: 560, height: 340};
 }
-
+//when link is clicked, open video embed
 $(document).on('click', '.watch', function (e) {
 	if (e.which > 1 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
 		return;
@@ -75,14 +77,28 @@ $(document).on('click', '.watch', function (e) {
 				start += parseInt(t[3], 10);
 		}
 	}
-
-	var $obj = make_video(m[2], null, start);
+	//maximum lazy codingww
+	else if (m[6]) {
+		var t = m[6].match(youtube_time_re);
+		if (t) {
+			if (t[1])
+				start += parseInt(t[1], 10) * 3600;
+			if (t[2])
+				start += parseInt(t[2], 10) * 60;
+			if (t[3])
+				start += parseInt(t[3], 10);
+		}
+	}
+	if (m[2])
+		var $obj = make_video(m[2], null, start);
+	else 
+		var $obj = make_video(m[5], null, start);
 	with_dom(function () {
 		$target.css('width', video_dims().width).append('<br>', $obj);
 	});
 	return false;
 });
-
+//when hovering over the youtube embed, get title data (I think?)
 $(document).on('mouseenter', '.watch', function (event) {
 	var $target = $(event.target);
 	if ($target.data('requestedTitle'))
