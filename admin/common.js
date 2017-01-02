@@ -93,8 +93,8 @@ function ipv6_mnemonic(ip) {
 
 	// discard first group (RIR etc)
 	// also discard some other groups for length/anonymity
-	var sur = ks.slice(1, 4).join('');
-	var given = ks.slice(6, 8).join('');
+	var sur = ks.slice(1, 4).join('') || 'z';
+	var given = ks.slice(6, 8).join('') || 'z';
 	return cap(sur) + ' ' + cap(given);
 }
 
