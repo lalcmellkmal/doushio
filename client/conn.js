@@ -69,7 +69,7 @@ window.new_socket = function (attempt) {
 	if (config.USE_WEBSOCKETS)
 		protocols.unshift('websocket');
 	return new SockJS(SOCKET_PATH, null, {
-		protocols_whitelist: protocols,
+		transports: protocols,
 	});
 };
 
