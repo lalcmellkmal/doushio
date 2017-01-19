@@ -5,6 +5,7 @@ opts.load_defaults();
 var _ = require('../lib/underscore'),
     amusement = require('./amusement'),
     async = require('async'),
+    auth = require('./auth'),
     caps = require('./caps'),
     check = require('./msgcheck').check,
     common = require('../common'),
@@ -15,7 +16,6 @@ var _ = require('../lib/underscore'),
     imager = require('../imager'),
     Muggle = require('../etc').Muggle,
     okyaku = require('./okyaku'),
-    persona = require('./persona'),
     render = require('./render'),
     STATE = require('./state'),
     tripcode = require('./../tripcode/tripcode'),
@@ -53,9 +53,9 @@ dispatcher[common.SYNCHRONIZE] = function (msg, client) {
 			client.kotowaru(Muggle("Bad protocol."));
 	}
 	var chunks = web.parse_cookie(msg.pop());
-	var cookie = persona.extract_login_cookie(chunks);
+	var cookie = auth.extract_login_cookie(chunks);
 	if (cookie) {
-		persona.check_cookie(cookie, checked);
+		auth.check_cookie(cookie, checked);
 		return true;
 	}
 	else
@@ -225,48 +225,23 @@ web.resource(/^\/$/, function (req, cb) {
 	cb(null, 'redirect', config.DEFAULT_BOARD + '/');
 });
 
-web.route_post(/^\/login$/, persona.login);
-web.route_post_auth(/^\/logout$/, persona.logout);
 if (config.DEBUG) {
 	/* Shortcuts for convenience */
 	winston.warn("Running in (insecure) debug mode.");
 	winston.warn("Do not use on the public internet.");
 	web.route_get(/^\/login$/, function (req, resp) {
-		persona.set_cookie(resp, {auth: 'Admin'});
+		auth.set_cookie(req, resp, {auth: 'Admin'});
 	});
 	web.route_get(/^\/mod$/, function (req, resp) {
-		persona.set_cookie(resp, {auth: 'Moderator'});
+		auth.set_cookie(req, resp, {auth: 'Moderator'});
 	});
-	web.route_get(/^\/logout$/, persona.logout);
 }
 else {
-	/* Production login/out endpoint */
-	web.resource(/^\/login$/, true, function (req, resp) {
-		resp.writeHead(200, web.noCacheHeaders);
-		resp.write(RES.loginTmpl[0]);
-		resp.write('{}');
-		resp.end(RES.loginTmpl[1]);
-	});
-
-	web.resource(/^\/logout$/, function (req, cb) {
-		if (req.ident.auth)
-			cb(null, 'ok');
-		else
-			cb(null, 'redirect', config.DEFAULT_BOARD+'/');
-	},
-	function (req, resp) {
-		resp.writeHead(200, web.noCacheHeaders);
-		resp.write(RES.loginTmpl[0]);
-		resp.write(JSON.stringify({
-			loggedInUser: req.ident.email,
-			x_csrf: req.ident.csrf,
-		}));
-		resp.end(RES.loginTmpl[1]);
-	});
+	/* Production login endpoint */
+	web.route_get(/^\/login$/, auth.login);
 }
-web.resource(/^\/(login|logout)\/$/, function (req, params, cb) {
-	cb(null, 'redirect', '../' + params[1]);
-});
+web.route_get(/^\/logout$/, auth.logout);
+web.route_post(/^\/logout$/, auth.logout);
 
 function write_mod_js(resp, ident) {
 	if (!RES.modJs) {
@@ -293,7 +268,7 @@ function (req, resp) {
 	write_mod_js(resp, {
 		auth: req.ident.auth,
 		csrf: req.ident.csrf,
-		email: req.ident.email,
+		user: req.ident.user,
 	});
 });
 
@@ -307,7 +282,7 @@ function (req, resp) {
 	write_mod_js(resp, {
 		auth: req.ident.auth,
 		csrf: req.ident.csrf,
-		email: req.ident.email,
+		user: req.ident.user,
 	});
 });
 

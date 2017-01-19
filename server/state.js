@@ -104,7 +104,6 @@ function read_templates(cb) {
 	async.parallel({
 		index: read('tmpl', 'index.html'),
 		filter: read('tmpl', 'filter.html'),
-		login: read('tmpl', 'login.html'),
 		curfew: read('tmpl', 'curfew.html'),
 		suspension: read('tmpl', 'suspension.html'),
 		aLookup: read('tmpl', 'alookup.html'),
@@ -129,7 +128,6 @@ function expand_templates(res) {
 		filterTmpl: tmpl(res.filter).tmpl,
 		curfewTmpl: tmpl(res.curfew).tmpl,
 		suspensionTmpl: tmpl(res.suspension).tmpl,
-		loginTmpl: tmpl(res.login).tmpl,
 		aLookupHtml: res.aLookup,
 		notFoundHtml: res.notFound,
 		serverErrorHtml: res.serverError,

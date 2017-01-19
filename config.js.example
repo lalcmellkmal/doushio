@@ -31,9 +31,10 @@ var config = {
 	EXCLUDE_REGEXP: /[\u2000-\u200f\u202a-\u202f\u205f-\u206f]+/g,
 	SAGE_ENABLED: true,
 
-	ADMIN_PERSONAS: ['lalc@doushio.com'],
-	MODERATOR_PERSONAS: ['mod@doushio.com'],
-	PERSONA_AUDIENCE: 'http://example.com:80',
+	ADMIN_GITHUBS: ['lalcmellkmal'],
+	MODERATOR_GITHUBS: [],
+	GITHUB_CLIENT_ID: '',
+	GITHUB_CLIENT_SECRET: '',
 	LOGIN_COOKIE_DOMAIN: 'example.com',
 	LOGIN_SESSION_TIME: 60*60*24*14,
 	IP_MNEMONIC: true,

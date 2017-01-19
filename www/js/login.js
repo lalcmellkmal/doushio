@@ -1,7 +1,6 @@
 (function () {
 
-var standalone = !!window.personaExitURL;
-var apiPath = standalone ? '' : '../';
+var root = THREAD ? '../../' : '../';
 
 var $button = $('<a></a>', {
 	href: '#',
@@ -9,8 +8,8 @@ var $button = $('<a></a>', {
 	'class': 'persona-button dark',
 	css: {'margin-top': '0.5em'},
 });
-var $caption = $('<span>Loading...</span>').appendTo($button);
-$button.appendTo(standalone ? 'body' : 'fieldset');
+var $caption = $('<span>...</span>').appendTo($button);
+$button.appendTo('fieldset');
 
 function inform(msg, color) {
 	$caption.text(msg);
@@ -20,55 +19,38 @@ function inform(msg, color) {
 
 function setup_button() {
 	if (!window.loggedInUser) {
-		inform('Invoke your Persona', 'orange');
-		$button.click(function (event) {
-			navigator.id.request();
-			event.preventDefault();
-		});
+		inform('Login', 'orange');
+		$button.prop('href', root + 'login');
+		$button.click(on_login);
 	}
 	else {
 		inform('Logout', 'blue');
-		$button.click(function (event) {
-			navigator.id.logout();
-			event.preventDefault();
-		});
+		$button.prop('href', root + 'logout');
+		$button.click(on_logout);
 	}
 	$button.focus();
 }
 
-function on_login(assertion) {
-	inform('Invoking...', 'dark');
-	$.ajax({
-		type: 'POST',
-		url: apiPath+'login',
-		data: {assertion: assertion},
-		dataType: 'json',
-		success: function (res) {
-			if (res && res.status == 'okay') {
-				inform('Success!', 'blue');
-				setTimeout(return_to_site, 500);
-			}
-			else
-				inform(res.message||'Unknown error.', 'dark');
-		},
-		error: function (res) {
-			inform('Network error.', 'dark');
-			console.error(res);
-		},
-	});
+function on_login(event) {
+	var opts = 'location=0,menubar=0,status=0,toolbar=0,height=700,width=500';
+	var popup = window.open(root + 'login?popup', 'login', opts);
+	if (popup)
+		event.preventDefault();
 }
 
-function on_logout() {
+function on_logout(event) {
 	inform('Logging out...', 'dark');
 	$.ajax({
 		type: 'POST',
-		url: apiPath+'logout',
+		url: root + 'logout',
 		data: {csrf: window.x_csrf},
 		dataType: 'json',
 		success: function (res) {
 			if (res && res.status == 'okay') {
 				inform('Logged out.', 'orange');
-				setTimeout(return_to_site, 1000);
+				setTimeout(function () {
+					window.location.reload();
+				}, 1000);
 			}
 			else
 				inform(res.message||'Unknown error.', 'dark');
@@ -78,30 +60,14 @@ function on_logout() {
 			console.error(res);
 		},
 	});
+	event.preventDefault();
 }
-
-function return_to_site() {
-	if (standalone)
-		window.location.href = window.personaExitURL;
-	else
-		window.location.reload();
-}
-
-yepnope({
-	load: 'https://login.persona.org/include.js',
-	complete: function () {
-		setup_button();
-		navigator.id.watch({
-			loggedInUser: window.loggedInUser || null,
-			onlogin: on_login,
-			onlogout: on_logout,
-		});
-	},
-});
 
 $('<link></link>', {
 	rel: 'stylesheet',
 	href: mediaURL + 'css/persona-buttons.css',
 }).appendTo('head');
+
+setup_button();
 
 })();

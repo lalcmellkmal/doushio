@@ -4,7 +4,7 @@
 yepnope(mediaURL + 'css/mod.css?v=1');
 
 var $selectButton, $controls;
-window.loggedInUser = IDENT.email;
+window.loggedInUser = IDENT.user;
 window.x_csrf = IDENT.csrf;
 
 function show_toolbox() {
