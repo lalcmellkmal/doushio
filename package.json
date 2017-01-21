@@ -29,6 +29,7 @@
 	"optionalDependencies": {
 		"node-expat": "2.3.15",
 		"nodemailer": "2.7.0",
+		"nodemailer-smtp-transport": "2.7.0",
 		"send": "0.14.1"
 	}
 }

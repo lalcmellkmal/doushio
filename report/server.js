@@ -4,11 +4,13 @@ var caps = require('../server/caps'),
     db = require('../db'),
     mainConfig = require('../config'),
     msgcheck = require('../server/msgcheck'),
+    nodemailer = require('nodemailer'),
     okyaku = require('../server/okyaku'),
     recaptcha = require('recaptcha'),
+    smtpTransport = require('nodemailer-smtp-transport'),
     winston = require('winston');
 
-var SMTP = require('nodemailer').createTransport('SMTP', config.SMTP);
+var SMTP = nodemailer.createTransport(smtpTransport(config.SMTP));
 
 const ERRORS = {
 	'invalid-site-private-key': "Sorry, the server isn't set up with reCAPTCHA properly.",
