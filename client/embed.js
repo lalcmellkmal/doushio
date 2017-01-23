@@ -41,7 +41,7 @@ function video_dims() {
 		return {width: 560, height: 340};
 }
 
-$(document).on('click', '.watch', function (e) {
+$DOC.on('click', '.watch', function (e) {
 	if (e.which > 1 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
 		return;
 	var $target = $(e.target);
@@ -83,7 +83,7 @@ $(document).on('click', '.watch', function (e) {
 	return false;
 });
 
-$(document).on('mouseenter', '.watch', function (event) {
+$DOC.on('mouseenter', '.watch', function (event) {
 	var $target = $(event.target);
 	if ($target.data('requestedTitle'))
 		return;
@@ -160,7 +160,7 @@ function make_soundcloud(path, dims) {
 	return make_embed(uri, params, dims);
 }
 
-$(document).on('click', '.soundcloud', function (e) {
+$DOC.on('click', '.soundcloud', function (e) {
 	if (e.which > 1 || e.ctrlKey || e.altKey || e.shiftKey || e.metaKey)
 		return;
 	var $target = $(e.target);
@@ -185,7 +185,7 @@ $(document).on('click', '.soundcloud', function (e) {
 });
 
 /* lol copy pasta */
-$(document).on('mouseenter', '.soundcloud', function (event) {
+$DOC.on('mouseenter', '.soundcloud', function (event) {
 	var $target = $(event.target);
 	if ($target.data('requestedTitle'))
 		return;
