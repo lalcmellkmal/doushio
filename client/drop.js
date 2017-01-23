@@ -66,8 +66,6 @@ function setup_upload_drop(e) {
 	go('drop', drop_shita);
 }
 
-$(function () {
-	setup_upload_drop(document.body);
-});
+setup_upload_drop(document.body);
 
 })();

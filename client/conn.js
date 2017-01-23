@@ -159,7 +159,7 @@ function window_focused() {
 	connSM.feed('retry');
 }
 
-$(function () {
+(function () {
 	_.defer(connSM.feeder('start'));
 	$(window).focus(function () {
 		setTimeout(window_focused, 20);
@@ -169,6 +169,6 @@ $(function () {
 		connSM.feed('retry');
 	});
 	window.addEventListener('offline', connSM.feeder('close'));
-});
+})();
 
 })();
