@@ -243,7 +243,7 @@ StillJob.prototype.perform_job = function () {
 
 StillJob.prototype.test_format = function (first, full, cb) {
 	/* Could have false positives due to chapter titles. Bah. */
-	var has_audio = /audio:/i.test(full);
+	var has_audio = /stream\s*#0.*audio:/i.test(full);
 	/* Spoofable? */
 	var dur = /duration: (\d\d):(\d\d):(\d\d)/i.exec(full);
 	if (dur) {
