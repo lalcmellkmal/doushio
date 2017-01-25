@@ -214,4 +214,14 @@ exports.commit_image_alloc = function (alloc, cb) {
 	});
 };
 
+exports.note_hash = function (hash, num) {
+	if (!config.DUPLICATE_COOLDOWN)
+		return;
+	var key = 'hash:' + hash;
+	db.connect().setex(key, config.DUPLICATE_COOLDOWN, num, function (err) {
+		if (err)
+			winston.warn("note hash: " + err);
+	});
+};
+
 var is_standalone = exports.is_standalone = db.is_standalone;

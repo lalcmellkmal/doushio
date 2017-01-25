@@ -35,6 +35,9 @@ module.exports = {
 	WEBM_AUDIO_SPOILER: 20,
 	*/
 
+	// set to 0 to disable duplicate detector
+	DUPLICATE_COOLDOWN: 3600,
+
 	SPOILER_DIR: '../assets/kana',
 
 	// this indicates which spoiler images may be selected by posters.

@@ -17,6 +17,7 @@ function redis_client() {
 		return require('../db').redis_client();
 	}
 }
+exports.connect = redis_client;
 
 function Onegai() {
 	events.EventEmitter.call(this);

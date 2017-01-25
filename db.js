@@ -554,7 +554,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 			m.hincrby('thread:' + op, 'imgctr', 1);
 		else
 			view.imgctr = 1;
-		note_hash(m, msg.image.hash, msg.num);
+		imager.note_hash(msg.image.hash, msg.num);
 		view.dims = view.dims.toString();
 	}
 	m.hmset(key, view);
@@ -1056,11 +1056,6 @@ Y.check_throttle = function (ip, callback) {
 	});
 };
 
-function note_hash(m, hash, num) {
-	var key = 'hash:' + hash;
-	m.setex(key, config.DEBUG ? 30 : 3600, num);
-}
-
 Y.add_image = function (post, alloc, ip, callback) {
 	var r = this.connect();
 	var num = post.num, op = post.op;
@@ -1088,7 +1083,7 @@ Y.add_image = function (post, alloc, ip, callback) {
 	var self = this;
 	function add_it() {
 		var m = r.multi();
-		note_hash(m, image.hash, post.num);
+		imager.note_hash(image.hash, post.num);
 		// HACK: hmset doesn't like our array, but we need it
 		var orig_dims = image.dims;
 		image.dims = orig_dims.toString();
