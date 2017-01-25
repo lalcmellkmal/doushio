@@ -358,8 +358,9 @@ function expand_image($img) {
 	var href = a.attr('href');
 	if (!href)
 		return;
-	var video = /\.webm$/i.test(href);
-	var dims = a.siblings('figcaption').text().match(/(\d+)x(\d+)/);
+	var cap = a.siblings('figcaption').text();
+	var dims = cap.match(/(\d+)x(\d+)/);
+	var video = /^Video/.test(cap);
 	if (!dims)
 		return;
 	var tw = $img.width(), th = $img.height();

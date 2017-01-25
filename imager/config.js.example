@@ -27,12 +27,15 @@ module.exports = {
 	// Warning: significantly increases page size for large threads.
 	PNG_THUMBS: false,
 	PNG_THUMB_QUALITY: 105,
-	WEBM: false,
-	WEBM_AUDIO: false,
-	// uncomment this to have all audio WebMs overlaid with
+	// allow video files (requires ffmpeg)
+	VIDEO: false,
+	VIDEO_EXTS: ['.webm', '.mp4'],
+	// allow audio streams
+	AUDIO: false,
+	// uncomment this to have all audio uploads overlaid with
 	// the corresponding spoiler image
 	/*
-	WEBM_AUDIO_SPOILER: 20,
+	AUDIO_SPOILER: 20,
 	*/
 
 	// set to 0 to disable duplicate detector

@@ -14,11 +14,8 @@ var async = require('async'),
     winston = require('winston');
 
 var IMAGE_EXTS = ['.png', '.jpg', '.gif'];
-if (config.WEBM) {
-	IMAGE_EXTS.push('.webm');
-	if (!config.DAEMON) {
-		console.warn("Please enable imager.config.DAEMON security.");
-	}
+if (config.VIDEO && !config.DAEMON) {
+	console.warn("Please enable imager.config.DAEMON security.");
 }
 
 function new_upload(req, resp) {
@@ -176,20 +173,22 @@ IU.process = function () {
 	image.ext = path.extname(filename).toLowerCase();
 	if (image.ext == '.jpeg')
 		image.ext = '.jpg';
-	if (IMAGE_EXTS.indexOf(image.ext) < 0)
+	if (IMAGE_EXTS.indexOf(image.ext) < 0
+			&& (!config.VIDEO || config.VIDEO_EXTS.indexOf(image.ext) < 0))
 		return this.failure(Muggle('Invalid image format.'));
 	image.imgnm = filename.substr(0, 256);
 
 	this.status('Verifying...');
-	if (image.ext == '.webm')
-		video_still(image.path, this.verify_webm.bind(this));
+	if (config.VIDEO_EXTS.indexOf(image.ext) >= 0)
+		video_still(image.path, image.ext, this.verify_video.bind(this));
 	else
 		this.verify_image();
 };
 
-function StillJob(src) {
+function StillJob(src, ext) {
 	jobs.Job.call(this);
 	this.src = src;
+	this.ext = ext;
 }
 util.inherits(StillJob, jobs.Job);
 
@@ -205,8 +204,7 @@ StillJob.prototype.perform_job = function () {
 			'-y', dest];
 	var opts = {env: {AV_LOG_FORCE_NOCOLOR: '1'}};
 	var self = this;
-	child_process.execFile(ffmpegBin, args, opts,
-				function (err, stdout, stderr) {
+	child_process.execFile(ffmpegBin, args, opts, function (err, stdout, stderr) {
 		var lines = stderr ? stderr.split('\n') : [];
 		var first = lines[0];
 		if (err) {
@@ -226,30 +224,49 @@ StillJob.prototype.perform_job = function () {
 			});
 			return;
 		}
-		var is_webm = /matroska,webm/i.test(first);
-		if (!is_webm) {
-			fs.unlink(dest, function (err) {
-				self.finish_job(Muggle(
-						'Video stream is not WebM.'));
+
+		self.test_format(first, stderr, function (format_err, has_audio) {
+			if (err) {
+				fs.unlink(dest, function (_unlink_err) {
+					self.finish_job(Muggle(format_err));
+				});
+				return;
+			}
+			self.finish_job(null, {
+				still_path: dest,
+				has_audio: has_audio,
 			});
-			return;
-		}
-
-		/* Could have false positives due to chapter titles. Bah. */
-		var has_audio = /audio:\s*vorbis/i.test(stderr);
-
-		self.finish_job(null, {
-			still_path: dest,
-			has_audio: has_audio,
 		});
 	});
 };
 
-function video_still(src, cb) {
-	jobs.schedule(new StillJob(src), cb);
+StillJob.prototype.test_format = function (first, full, cb) {
+	/* Could have false positives due to chapter titles. Bah. */
+	var has_audio = /audio:/i.test(full);
+
+	if (/stream #1/i.test(full))
+		return cb('Video contains more than one stream.');
+
+	if (this.ext == '.webm') {
+		if (!/matroska,webm/i.test(first))
+			return cb('Video stream is not WebM.');
+		cb(null, has_audio);
+	}
+	else if (this.ext == '.mp4') {
+		if (!/mp4,/i.test(first))
+			return cb('Video stream is not mp4.');
+		cb(null, has_audio);
+	}
+	else {
+		cb('Unsupported video format.');
+	}
 }
 
-IU.verify_webm = function (err, info) {
+function video_still(src, ext, cb) {
+	jobs.schedule(new StillJob(src, ext), cb);
+}
+
+IU.verify_video = function (err, info) {
 	if (err)
 		return this.failure(err);
 	var self = this;
@@ -257,18 +274,19 @@ IU.verify_webm = function (err, info) {
 		if (err)
 			winston.warn("Tracking error: " + err);
 
-		if (info.has_audio && !config.WEBM_AUDIO)
+		if (info.has_audio && !config.AUDIO)
 			return self.failure(Muggle('Audio is not allowed.'));
 
 		// pretend it's a PNG for the next steps
 		var image = self.image;
-		image.video = image.path;
+		image.video = image.ext.replace('.', '');
+		image.video_path = image.path;
 		image.path = info.still_path;
 		image.ext = '.png';
 		if (info.has_audio) {
 			image.audio = true;
-			if (config.WEBM_AUDIO_SPOILER)
-				image.spoiler = config.WEBM_AUDIO_SPOILER;
+			if (config.AUDIO_SPOILER)
+				image.spoiler = config.AUDIO_SPOILER;
 		}
 
 		self.verify_image();
@@ -279,7 +297,7 @@ IU.verify_image = function () {
 	var image = this.image;
 	this.tagged_path = image.ext.replace('.', '') + ':' + image.path;
 	var checks = {
-		stat: fs.stat.bind(fs, image.video || image.path),
+		stat: fs.stat.bind(fs, image.video_path || image.path),
 		dims: identify.bind(null, this.tagged_path),
 	};
 	if (image.ext == '.png')
@@ -351,7 +369,7 @@ IU.deduped = function (err) {
 	this.fill_in_specs(specs, 'thumb');
 
 	// was a composited spoiler selected or forced?
-	if (image.audio && config.WEBM_AUDIO_SPOILER)
+	if (image.audio && config.AUDIO_SPOILER)
 		specs.comp = specs.overlay = true;
 	if (sp && config.SPOILER_IMAGES.trans.indexOf(sp) >= 0)
 		specs.comp = true;
@@ -411,11 +429,11 @@ IU.got_nails = function () {
 		return;
 
 	var image = this.image;
-	if (image.video) {
+	if (image.video_path) {
 		// stop pretending this is just a still image
-		image.path = image.video;
-		image.ext = '.webm';
-		delete image.video;
+		image.path = image.video_path;
+		image.ext = '.' + image.video;
+		delete image.video_path;
 	}
 
 	var time = Date.now();
@@ -471,7 +489,7 @@ which('identify', function (bin) { identifyBin = bin; });
 which('convert', function (bin) { convertBin = bin; });
 
 var ffmpegBin;
-if (config.WEBM) {
+if (config.VIDEO) {
 	which('ffmpeg', function (bin) { ffmpegBin = bin; });
 }
 

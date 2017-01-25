@@ -722,11 +722,13 @@ make_upload_form: function () {
 		type: 'button', value: 'Cancel',
 		click: $.proxy(this, 'cancel'),
 	});
-	this.$imageInput = $('<input>', {
+	var opts = {
 		type: 'file', id: 'image', name: 'image',
-		accept: imagerConfig.WEBM ? 'imager/*;.webm' : 'image/*',
 		change: $.proxy(this, 'on_image_chosen'),
-	});
+	};
+	if (!imagerConfig.VIDEO)
+		opts.accept = 'image/*';
+	this.$imageInput = $('<input>', opts);
 	this.$toggle = $('<input>', {
 		type: 'button', id: 'toggle',
 	});

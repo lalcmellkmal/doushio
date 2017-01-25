@@ -503,7 +503,7 @@ OS.image_paths = function () {
 var audioIndicator = "\u266B"; // musical note
 
 OS.gazou = function (info, toppu) {
-	var src, name, caption;
+	var src, name, caption, video;
 	if (info.vint) {
 		src = encodeURI('../outbound/hash/' + info.MD5);
 		var google = encodeURI('../outbound/g/' + info.vint);
@@ -514,14 +514,17 @@ OS.gazou = function (info, toppu) {
 	}
 	else {
 		src = encodeURI(this.image_paths().src + info.src);
-		caption = ['Image ', new_tab_link(src, info.src)];
+		video = info.video || (/\.webm$/i.test(src) && 'webm'); // webm check is legacy
+		caption = [video ? 'Video ' : 'Image ', new_tab_link(src, info.src)];
 	}
 
 	var img = this.gazou_img(info, toppu);
 	var dims = info.dims[0] + 'x' + info.dims[1];
 
 	return [safe('<figure data-MD5="'), info.MD5,
-		safe('" data-size="'), info.size, safe('"><figcaption>'),
+		safe('" data-size="'), info.size,
+		video ? [safe('" data-video="'), video] : '',
+		safe('"><figcaption>'),
 		caption, safe(' <i>('),
 		info.audio ? (audioIndicator + ', ') : '',
 		readable_filesize(info.size), ', ',
