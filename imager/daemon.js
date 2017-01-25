@@ -225,7 +225,7 @@ StillJob.prototype.perform_job = function () {
 			return;
 		}
 
-		self.test_format(first, stderr, function (format_err, has_audio) {
+		self.test_format(first, stderr, function (format_err, has_audio, dur) {
 			if (err) {
 				fs.unlink(dest, function (_unlink_err) {
 					self.finish_job(Muggle(format_err));
@@ -235,6 +235,7 @@ StillJob.prototype.perform_job = function () {
 			self.finish_job(null, {
 				still_path: dest,
 				has_audio: has_audio,
+				duration: dur,
 			});
 		});
 	});
@@ -243,6 +244,19 @@ StillJob.prototype.perform_job = function () {
 StillJob.prototype.test_format = function (first, full, cb) {
 	/* Could have false positives due to chapter titles. Bah. */
 	var has_audio = /audio:/i.test(full);
+	/* Spoofable? */
+	var dur = /duration: (\d\d):(\d\d):(\d\d)/i.exec(full);
+	if (dur) {
+		var m = parseInt(dur[2], 10), s = parseInt(dur[3], 10);
+		if (dur[1] != '00' || m > 2)
+			return cb('Video exceeds 3 minutes.');
+		dur = (m ? m + 'm' : '') + s + 's';
+		if (dur == '0s')
+			dur = '1s';
+	}
+	else {
+		winston.warn("Could not parse duration:\n" + full);
+	}
 
 	if (/stream #1/i.test(full))
 		return cb('Video contains more than one stream.');
@@ -250,12 +264,12 @@ StillJob.prototype.test_format = function (first, full, cb) {
 	if (this.ext == '.webm') {
 		if (!/matroska,webm/i.test(first))
 			return cb('Video stream is not WebM.');
-		cb(null, has_audio);
+		cb(null, has_audio, dur);
 	}
 	else if (this.ext == '.mp4') {
 		if (!/mp4,/i.test(first))
 			return cb('Video stream is not mp4.');
-		cb(null, has_audio);
+		cb(null, has_audio, dur);
 	}
 	else {
 		cb('Unsupported video format.');
@@ -288,6 +302,8 @@ IU.verify_video = function (err, info) {
 			if (config.AUDIO_SPOILER)
 				image.spoiler = config.AUDIO_SPOILER;
 		}
+		if (info.duration)
+			image.duration = info.duration;
 
 		self.verify_image();
 	});
