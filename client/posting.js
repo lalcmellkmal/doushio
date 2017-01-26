@@ -409,6 +409,8 @@ on_input: function (val) {
 		/* Substitute */
 		var t = m[4] || '';
 		t = this.find_time_arg(m[3]) || this.find_time_arg(m[1]) || t;
+		if (t[0] == '?')
+			t = '#' + t.substr(1);
 		var v = '>>>/watch?v=' + m[2] + t;
 		var old = m[0].length;
 		val = val.substr(0, m.index) + v + val.substr(m.index + old);
