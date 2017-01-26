@@ -623,12 +623,6 @@ web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {
 	resp.end(RES.aLookupHtml);
 });
 
-web.resource(/^\/outbound\/foolz\/(\d{0,10})$/, function (req, params, cb) {
-	var dest = 'http://archive.foolz.us/foolz/';
-	var thread = parseInt(params[1], 10);
-	cb(null, 303.1, thread ? dest+'thread/'+thread+'/' : dest);
-});
-
 web.route_get_auth(/^\/dead\/(src|thumb|mid)\/(\w+\.\w{3})$/,
 			function (req, resp, params) {
 	if (!caps.can_administrate(req.ident))
