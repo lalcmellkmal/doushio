@@ -137,27 +137,23 @@ $DOC.on('mouseenter', '.watch', function (event) {
 	}
 });
 
-function make_embed(uri, params, dims) {
-	var $obj = $('<object/>', {attr: dims});
-	for (var name in params)
-		$('<param/>', {
-			attr: {name: name, value: params[name]},
-		}).appendTo($obj);
-	$('<embed/>', {
-		src: uri, type: 'application/x-shockwave-flash',
-	}).attr(dims).attr(params).appendTo($obj);
-	return $obj;
-}
-
 /* SOUNDCLOUD */
 
 var soundcloud_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.)?soundcloud\.com\/([\w-]{1,40}\/[\w-]{1,80})\/?/;
 
 function make_soundcloud(path, dims) {
-	var query = {url: 'http://soundcloud.com/' + path};
-	var uri = 'https://player.soundcloud.com/player.swf?' + $.param(query);
-	var params = {movie: uri};
-	return make_embed(uri, params, dims);
+	var query = {
+		url: 'http://soundcloud.com/' + path,
+		color: 'ffaa66',
+		auto_play: false,
+		show_user: false,
+		show_comments: false,
+	};
+	var uri = 'https://w.soundcloud.com/player/?' + $.param(query);
+	return $('<iframe></iframe>', {
+		src: uri, width: dims.width, height: dims.height,
+		scrolling: 'no', frameborder: 'no',
+	});
 }
 
 $DOC.on('click', '.soundcloud', function (e) {
@@ -165,7 +161,7 @@ $DOC.on('click', '.soundcloud', function (e) {
 		return;
 	var $target = $(e.target);
 
-	var $obj = $target.find('object');
+	var $obj = $target.find('iframe');
 	if ($obj.length) {
 		$obj.siblings('br').andSelf().remove();
 		$target.css('width', 'auto');
@@ -177,7 +173,7 @@ $DOC.on('click', '.soundcloud', function (e) {
 		return;
 	}
 	var width = Math.round($(window).innerWidth() * 0.75);
-	var $obj = make_soundcloud(m[1], {width: width, height: 81});
+	var $obj = make_soundcloud(m[1], {width: width, height: 166});
 	with_dom(function () {
 		$target.css('width', width).append('<br>', $obj);
 	});
