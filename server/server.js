@@ -614,13 +614,10 @@ web.resource(/^\/outbound\/hash\/([\w+\/]{22})$/, function (req, params, cb) {
 
 web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {
 	var thread = parseInt(params[1], 10);
+	var url = 'https://boards.4chan.org/a/';
 	if (thread)
-		cb(null, 'ok');
-	else
-		cb(null, 303.1, 'http://boards.4chan.org/a/');
-}, function (req, resp) {
-	resp.writeHead(200, web.noCacheHeaders);
-	resp.end(RES.aLookupHtml);
+		url += 'thread/' + thread;
+	cb(null, 303.1, url);
 });
 
 web.route_get_auth(/^\/dead\/(src|thumb|mid)\/(\w+\.\w{3})$/,

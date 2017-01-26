@@ -78,7 +78,6 @@ exports.SERVER_DEPS = [
 exports.SERVER_STATE = [
 	'admin/client.js',
 	'hot.js',
-	'tmpl/alookup.html',
 	'tmpl/curfew.html',
 	'tmpl/filter.html',
 	'tmpl/index.html',
