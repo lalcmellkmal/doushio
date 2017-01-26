@@ -643,8 +643,9 @@ OS.post_nav = function (post) {
 			'">' + n + '</a></nav>');
 };
 
-function action_link_html(href, name) {
-	return '<span class="act"><a href="'+href+'">'+name+'</a></span>';
+function action_link_html(href, name, id) {
+	var span = '<span ' + (id ? 'id="'+id+'" ' : '') + 'class="act">';
+	return span + '<a href="'+href+'">'+name+'</a></span>';
 }
 exports.action_link_html = action_link_html;
 

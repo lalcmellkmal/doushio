@@ -19,7 +19,7 @@ this.hot = {
 	},
 
 	/* Bump this version whenever you change base.css */
-	BASE_CSS_VERSION: 43,
+	BASE_CSS_VERSION: 44,
 	/* Bump this version whenever you modify any existing theme CSS */
 	THEME_CSS_VERSION: 9,
 

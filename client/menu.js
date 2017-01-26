@@ -63,4 +63,10 @@ oneeSama.hook('draft', function ($post) {
 
 $('<span class=control/>').prependTo('header');
 
+$('#persona').click(function (e) {
+	e.preventDefault();
+	var $fs = $('fieldset');
+	$fs.css('visibility', $fs.css('visibility') == 'hidden' ? 'visible' : 'hidden');
+});
+
 })();
