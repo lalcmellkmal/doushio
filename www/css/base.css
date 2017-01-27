@@ -389,3 +389,26 @@ pre, .themed {
 		display: block;
 	}
 }
+
+blockquote.twitter-tweet {
+	display: inline-block;
+	padding: 20px;
+	margin: 0;
+	border: #ddd 1px solid;
+	border-radius: 2px;
+	font: normal 16px/1.4 Helvetica, Roboto, "Segoe UI", Calibri, sans-serif;
+	color: #1c2022;
+	background-color: #fff;
+}
+
+blockquote.twitter-tweet > p {
+	display: block;
+	margin: 0 5px 10px 0;
+}
+
+blockquote.twitter-tweet > a {
+	color: rgb(105, 120, 130);
+	display: block;
+	font-size: 14px;
+	text-decoration: none;
+}

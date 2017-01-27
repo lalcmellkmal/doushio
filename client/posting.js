@@ -437,6 +437,21 @@ on_input: function (val) {
 			end -= diff;
 		}
 	}
+	/* and Twitter links */
+	while (true) {
+		var m = val.match(twitter_url_re);
+		if (!m)
+			break;
+		var tw = '>>>/@' + m[1] + '/' + m[2];
+		var old = m[0].length;
+		val = val.substr(0, m.index) + tw + val.substr(m.index + old);
+		changed = true;
+		if (m.index < start) {
+			var diff = old - tw.length;
+			start -= diff;
+			end -= diff;
+		}
+	}
 	if (changed)
 		$input.val(val);
 

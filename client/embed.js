@@ -7,6 +7,8 @@
 var youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m.)?(?:youtu\.be\/|youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=)([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?([#\?]t=[\dhms]{1,9})?/;
 var youtube_time_re = /^[#\?]t=(?:(\d\d?)h)?(?:(\d{1,3})m)?(?:(\d{1,3})s)?$/;
 
+(function () {
+
 function make_video(id, params, start) {
 	if (!params)
 		params = {allowFullScreen: 'true'};
@@ -37,6 +39,7 @@ function make_video(id, params, start) {
 		"class": 'youtube-player',
 	});
 }
+window.make_video = make_video;
 
 function video_dims() {
 	if (window.screen && screen.width <= 320)
@@ -147,7 +150,7 @@ function text_child($target) {
 
 /* SOUNDCLOUD */
 
-var soundcloud_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.)?soundcloud\.com\/([\w-]{1,40}\/[\w-]{1,80})\/?/;
+window.soundcloud_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.)?soundcloud\.com\/([\w-]{1,40}\/[\w-]{1,80})\/?/;
 
 function make_soundcloud(path, dims) {
 	var query = {
@@ -230,3 +233,238 @@ $DOC.on('mouseenter', '.soundcloud', function (event) {
 			node.textContent = orig + ' (gone?)';
 	}
 });
+
+/* TWITTER */
+
+window.twitter_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|mobile\.|m\.)?twitter\.com\/(\w{1,15})\/status\/(\d{4,20})\/?/;
+
+$DOC.on('click', '.tweet', function (e) {
+	if (e.which > 1 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
+		return;
+	var $target = $(e.target);
+	if (!$target.is('a.tweet') || $target.data('tweet') == 'error')
+		return;
+	setup_tweet($target);
+
+	var $tweet = $target.find('.twitter-tweet');
+	if ($tweet.length) {
+		$tweet.siblings('br').andSelf().remove();
+		$target.css('width', 'auto');
+		text_child($target).textContent = $target.data('tweet-expanded');
+		return false;
+	}
+	fetch_tweet($target, function (err, info) {
+		var orig = $target.data('tweet-ref');
+		if (err) {
+			$target.data('tweet', 'error');
+			if (info && info.node) {
+				with_dom(function () {
+					info.node.textContent = orig + ' (error: ' + err + ')';
+				});
+			}
+			return;
+		}
+		$target.data('tweet', info.tweet);
+		var w = 500;
+		if (window.screen && screen.width && screen.width < w)
+			w = screen.width - 20;
+
+		var $tweet = $($.parseHTML(info.tweet.html)[0]);
+		with_tweet_widget(function () {
+			$target.append('<br>', $tweet);
+			$target.css('width', w);
+			info.node.textContent = orig;
+		});
+	});
+	return false;
+});
+
+$DOC.on('mouseenter', '.tweet', function (event) {
+	var $target = $(event.target);
+	if (!$target.is('a.tweet') || $target.data('tweet'))
+		return;
+	setup_tweet($target);
+
+	fetch_tweet($target, function (err, info) {
+		if (err) {
+			if (info && info.node) {
+				$target.data('tweet', 'error');
+				with_dom(function () {
+					info.node.textContent += ' (error: ' + err + ')';
+				});
+			}
+			else
+				console.warn(err);
+			return;
+		}
+
+		var node = info.node;
+		var orig = $target.data('tweet-ref') || node.textContent;
+		var html = info.tweet && info.tweet.html;
+		if (!html) {
+			$target.data('tweet', 'error');
+			node.textContent = orig + ' (broken?)';
+			return;
+		}
+		$target.data('tweet', info.tweet);
+		// twitter sends us HTML of the tweet; scrape it a little
+		var $tweet = $($.parseHTML(html)[0]);
+		var $p = $tweet.find('p');
+		if ($p.length) {
+			// chop the long ID number off our ref
+			var prefix = orig;
+			var m = /^(.+)\/\d{4,20}$/.exec(prefix);
+			if (m)
+				prefix = m[1];
+
+			// scrape the tweet text inside the <p/>
+			var textNode = text_child($p);
+			var text = textNode ? textNode.textContent : $p.text();
+			with_dom(function () {
+				var expanded = prefix + ' \u00b7 ' + text;
+				$target.data('tweet-expanded', expanded);
+				node.textContent = expanded;
+				$target.css({color: 'black'});
+			});
+		}
+		else {
+			with_dom(function () {
+				node.textContent = orig + ' (could not scrape)';
+			});
+		}
+	});
+});
+
+/// call this before fetch_tweet or any DOM modification of the ref
+function setup_tweet($target) {
+	setup_tweet_widgets_script();
+	if ($target.data('tweet-ref'))
+		return;
+	var node = text_child($target);
+	if (!node)
+		return;
+	$target.data('tweet-ref', node.textContent);
+}
+
+/// fetch & cache the json about the tweet referred to by >>>/@ref $target
+function fetch_tweet($target, cb) {
+	var node = text_child($target);
+	if (!node)
+		return cb("ref's text node not found");
+
+	var cached = $target.data('tweet');
+	if (cached == 'error')
+		return cb('could not contact twitter', {node: node});
+	if (cached && cached.inflight) {
+		var queue = TW_CB[cached.inflight];
+		if (queue)
+			queue.callbacks.push(cb);
+		else
+			cb('gone', {node: node});
+		return;
+	}
+	if (cached)
+		return cb(null, {tweet: cached, node: node});
+
+	var m = $target.attr('href').match(twitter_url_re);
+	if (!m)
+		return cb('invalid tweet ref', {node: node});
+	var id = m[2];
+
+	// if this request is already in-flight, just wait on the result
+	var flight = TW_CB[id];
+	if (flight) {
+		flight.node = node;
+		flight.callbacks.push(cb);
+		return;
+	}
+	// otherwise, make the call
+	var handle = setTimeout(tweet_request_expired.bind(null, id), 5000);
+	TW_CB[id] = {node: node, callbacks: [cb], timeout: handle};
+	$target.data('tweet', {inflight: id});
+
+	var params = {
+		id: id,
+		callback: 'tweet_callback',
+		hide_thread: true,
+		omit_script: true,
+		link_color: '%ffaa99',
+		theme: 'light', // TODO tie into current theme
+	};
+
+	$.ajax({
+		url: 'https://api.twitter.com/1/statuses/oembed.json?' + $.param(params),
+		dataType: 'jsonp',
+	});
+
+	var orig = $target.data('tweet-ref') || node.textContent;
+	with_dom(function () {
+		node.textContent = orig + '...';
+	});
+}
+
+var TW_CB = {};
+
+function tweet_request_expired(id) {
+	var req = TW_CB[id];
+	if (!req)
+		return;
+	delete TW_CB[id];
+	var node = req.node;
+	if (node) {
+		req.node = null;
+		var payload = {node: node};
+		while (req.callbacks.length)
+			req.callbacks.shift()('timed out', payload);
+	}
+	req.timeout = 0;
+	req.callbacks = [];
+}
+
+window.tweet_callback = function (tweet) {
+	var id = /\/(\d+)$/.exec(tweet.url)[1];
+	var saved = TW_CB[id];
+	if (!saved) {
+		console.warn('tweet callback for non-pending tweet', tweet);
+		return;
+	}
+	delete TW_CB[id];
+
+	var payload = {node: saved.node, tweet: tweet};
+	saved.node = null;
+	while (saved.callbacks.length)
+		saved.callbacks.shift()(null, payload);
+	if (saved.timeout)
+		clearTimeout(saved.timeout);
+	saved.timeout = 0;
+};
+
+var TW_WG_SCRIPT;
+
+function setup_tweet_widgets_script() {
+	TW_WG_SCRIPT = $.getScript('https://platform.twitter.com/widgets.js').done(function () {
+		TW_WG_SCRIPT = {done: twttr.ready};
+		twttr.ready(function () {
+			TW_WG_SCRIPT = true;
+		});
+	});
+	setup_tweet_widgets_script = function () {};
+}
+
+/// when creating a tweet widget, wrap the DOM insertion with this
+function with_tweet_widget(func) {
+	function go() {
+		func();
+		if (window.twttr)
+			twttr.widgets.load();
+	}
+	if (TW_WG_SCRIPT && TW_WG_SCRIPT.done) {
+		TW_WG_SCRIPT.done(function () {
+			with_dom(go);
+		});
+	}
+	else
+		with_dom(go);
+}
+
+})();
