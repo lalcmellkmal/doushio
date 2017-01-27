@@ -93,9 +93,7 @@ $DOC.on('mouseenter', '.watch', function (event) {
 		return;
 	$target.data('requestedTitle', true);
 	/* Edit textNode in place so that we don't mess with the embed */
-	var node = $target.contents().filter(function () {
-		return this.nodeType === 3;
-	})[0];
+	var node = text_child($target);
 	if (!node)
 		return;
 	var orig = node.textContent;
@@ -140,6 +138,12 @@ $DOC.on('mouseenter', '.watch', function (event) {
 		}
 	}
 });
+
+function text_child($target) {
+	return $target.contents().filter(function () {
+		return this.nodeType === 3;
+	})[0];
+}
 
 /* SOUNDCLOUD */
 
@@ -191,9 +195,7 @@ $DOC.on('mouseenter', '.soundcloud', function (event) {
 		return;
 	$target.data('requestedTitle', true);
 	/* Edit textNode in place so that we don't mess with the embed */
-	var node = $target.contents().filter(function () {
-		return this.nodeType === 3;
-	})[0];
+	var node = text_child($target);
 	if (!node)
 		return;
 	var orig = node.textContent;
