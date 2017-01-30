@@ -19,12 +19,30 @@ var OPs = exports.OPs = cache.OPs;
 var TAGS = exports.TAGS = cache.opTags;
 var SUBS = exports.SUBS = cache.threadSubs;
 
+var LUA = {};
+function register_lua(name) {
+	var src = fs.readFileSync('lua/' + name + '.lua', 'UTF-8');
+	LUA[name] = {src: src};
+}
+
 function redis_client() {
-	return require('redis').createClient(config.REDIS_PORT || undefined);
+	var conn = require('redis').createClient(config.REDIS_PORT || undefined);
+	// ASYNC SETUP RACE!
+	for (var k in LUA) {
+		conn.script('load', LUA[k].src, function (err, sha) {
+			if (err)
+				throw err;
+			LUA[k].sha = sha;
+		});
+	}
+	return conn;
 }
 exports.redis_client = redis_client;
 
-global.redis = redis_client();
+// wait for the `register_lua` calls before connecting
+process.nextTick(function () {
+	global.redis = redis_client();
+});
 
 /* REAL-TIME UPDATES */
 
@@ -1147,38 +1165,26 @@ Y.append_post = function (post, tail, old_state, extra, cb) {
 	});
 };
 
-function finish_off(m, key, body) {
-	m.hset(key, 'body', body);
-	m.del(key.replace('dead', 'thread') + ':body');
-	m.hdel(key, 'state');
-	m.srem('liveposts', key);
+register_lua('finish');
+
+function finish_off(m, key) {
+	var body_key = key.replace('dead', 'thread') + ':body';
+	m.evalsha(LUA.finish.sha, 3, key, body_key, 'liveposts');
 }
 
 Y.finish_post = function (post, callback) {
 	var m = this.connect().multi();
 	var key = (post.op ? 'post:' : 'thread:') + post.num;
 	/* Don't need to check .exists() thanks to client state */
-	finish_off(m, key, post.body);
+	finish_off(m, key);
 	this._log(m, post.op || post.num, common.FINISH_POST, [post.num]);
 	m.exec(callback);
 };
 
 Y.finish_quietly = function (key, callback) {
-	var r = this.connect();
-	r.hexists(key, 'body', function (err, exists) {
-		if (err)
-			return callback(err);
-		if (exists)
-			return callback(null);
-		var body_key = key.replace('dead', 'thread') + ':body';
-		r.get(body_key, function (err, body) {
-			if (err)
-				return callback(err);
-			var m = r.multi();
-			finish_off(m, key, body);
-			m.exec(callback);
-		});
-	});
+	var m = this.connect().multi();
+	finish_off(m, key);
+	m.exec(callback);
 };
 
 Y.finish_all = function (callback) {

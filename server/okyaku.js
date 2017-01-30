@@ -113,7 +113,9 @@ OK.on_close = function () {
 	if (db) {
 		db.kikanai();
 		if (this.post)
-			this.finish_post(function () {
+			this.finish_post(function (err) {
+				if (err)
+					winston.warn('finishing post: ' + err);
 				db.disconnect();
 			});
 		else
