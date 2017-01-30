@@ -1456,7 +1456,7 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			}
 			var omit = Math.max(total - abbrev, 0);
 			self.emit('thread', opPost, omit);
-			self._get_each_reply(tag, 0, nums, opts);
+			self._get_each_reply(0, nums, opts);
 		});
 	});
 };
@@ -1498,7 +1498,7 @@ function can_see_priv(priv, ident) {
 	return priv == ident.priv;
 }
 
-Reader.prototype._get_each_reply = function (tag, ix, nums, opts) {
+Reader.prototype._get_each_reply = function (ix, nums, opts) {
 	if (!nums || ix >= nums.length) {
 		this.emit('endthread');
 		this.emit('end');
@@ -1511,7 +1511,7 @@ Reader.prototype._get_each_reply = function (tag, ix, nums, opts) {
 			return self.emit('error', err);
 		if (post)
 			self.emit('post', post);
-		self._get_each_reply(tag, ix + 1, nums, opts);
+		self._get_each_reply(ix + 1, nums, opts);
 	});
 };
 
