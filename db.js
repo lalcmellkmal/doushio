@@ -7,6 +7,7 @@ var _ = require('./lib/underscore'),
     events = require('events'),
     fs = require('fs'),
     hooks = require('./hooks'),
+    ipUtils = require('ip'),
     Muggle = require('./etc').Muggle,
     tail = require('./tail'),
     util = require('util'),
@@ -470,7 +471,7 @@ Y.reserve_post = function (op, ip, callback) {
 	if (config.READ_ONLY)
 		return callback(Muggle("Can't post right now."));
 	var r = this.connect();
-	if (ip == '127.0.0.1')
+	if (ipUtils.isLoopback(ip))
 		return reserve();
 
 	var key = 'ip:' + ip + ':throttle:';
@@ -584,7 +585,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 			m.zadd(expiry_queue_key(), score, entry);
 		}
 		/* Rate-limit new threads */
-		if (ip != '127.0.0.1')
+		if (ipUtils.isLoopback(ip))
 			m.setex('ip:'+ip+':throttle:thread',
 					config.THREAD_THROTTLE, op);
 	}
