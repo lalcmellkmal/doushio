@@ -28,11 +28,14 @@ function register_lua(name) {
 function redis_client() {
 	var conn = require('redis').createClient(config.REDIS_PORT || undefined);
 	// ASYNC SETUP RACE!
-	for (var k in LUA) {
-		conn.script('load', LUA[k].src, function (err, sha) {
+	for (var k in LUA)
+		load(LUA[k]);
+
+	function load(entry) {
+		conn.script('load', entry.src, function (err, sha) {
 			if (err)
 				throw err;
-			LUA[k].sha = sha;
+			entry.sha = sha;
 		});
 	}
 	return conn;
@@ -1194,22 +1197,23 @@ Y.finish_all = function (callback) {
 		if (err)
 			return callback(err);
 		async.forEach(keys, function (key, cb) {
-			var m = r.multi();
-			m.get(key + ':body');
-			var isPost = key.slice(0, 5) == 'post:';
+			var isPost = /^post:(\d+)$/.test(key);
 			if (isPost)
-				m.hget(key, 'op');
-			m.exec(function (err, rs) {
+				r.hget(key, 'op', fini);
+			else
+				fini();
+
+			function fini(err, op) {
 				if (err)
 					return cb(err);
 				var m = r.multi();
-				finish_off(m, key, rs[0]);
-				var n = parseInt(key.match(/:(\d+)$/)[1]);
-				var op = isPost ? parseInt(rs[1], 10) : n;
+				finish_off(m, key);
+				var n = parseInt(key.match(/:(\d+)$/)[1], 10);
+				op = isPost ? parseInt(op, 10) : n;
 				self._log(m, op, common.FINISH_POST, [n]);
 				m.srem('liveposts', key);
 				m.exec(cb);
-			});
+			}
 		}, callback);
 	});
 };
