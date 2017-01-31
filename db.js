@@ -1409,17 +1409,17 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			});
 			return;
 		}
-		var pre_post = result.pre;
+		var opPost = result.pre;
 		var total = result.total;
 		var nums = result.replies;
 		this.active = result.active; // TODO use these
 
 		var exists = true;
-		if (pre_post.hide && !opts.showDead)
+		if (opPost.hide && !opts.showDead)
 			exists = false;
-		else if (!can_see_priv(pre_post.priv, self.ident))
+		else if (!can_see_priv(opPost.priv, self.ident))
 			exists = false;
-		var tags = parse_tags(pre_post.tags);
+		var tags = parse_tags(opPost.tags);
 		if (!graveyard && tags.indexOf(tag) < 0) {
 			/* XXX: Should redirect directly to correct thread */
 			if (opts.redirect)
@@ -1431,11 +1431,10 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			self.emit('nomatch');
 			return;
 		}
-		self.emit('begin', pre_post);
-		pre_post.num = num;
-		pre_post.time = parseInt(pre_post.time, 10);
+		self.emit('begin', opPost);
+		opPost.num = num;
+		opPost.time = parseInt(opPost.time, 10);
 
-		var opPost = pre_post;
 		var priv = self.y.ident.priv;
 
 		if (opts.showDead || priv) {
