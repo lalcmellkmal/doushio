@@ -52,6 +52,7 @@ exports.SERVER_DEPS = [
 	'curfew/server.js',
 	'lib/underscore.js',
 	'lua/finish.lua',
+	'lua/get_thread.lua',
 	'imager/config.js',
 	'imager/daemon.js',
 	'imager/db.js',

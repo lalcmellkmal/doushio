@@ -1350,6 +1350,29 @@ Y._get_each_thread = function (reader, ix, nums) {
 
 /* LURKERS */
 
+register_lua('get_thread');
+
+function lua_get_thread(r, key, abbrev, cb) {
+	var body_key = key.replace('dead', 'thread') + ':body';
+	var posts_key = key + ':posts';
+	r.evalsha(LUA.get_thread.sha, 4, key, body_key, posts_key, 'liveposts', abbrev,
+	function (err, rs) {
+		if (err)
+			return cb(err);
+		if (!rs)
+			return cb(null);
+		if (rs.length != 4)
+			throw new Error('get_thread.lua unexpected output');
+
+		cb(null, {
+			pre: unbulk(rs[0]),
+			replies: rs[1].map(function (id) { return parseInt(id, 10); }),
+			active: rs[2].map(unbulk),
+			total: rs[3],
+		});
+	});
+}
+
 function Reader(yakusoku) {
 	events.EventEmitter.call(this);
 	this.y = yakusoku;
@@ -1366,11 +1389,13 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 	if (graveyard)
 		opts.showDead = true;
 	var key = (graveyard ? 'dead:' : 'thread:') + num;
+	var abbrev = opts.abbrev || 0;
+
 	var self = this;
-	r.hgetall(key, function (err, pre_post) {
+	lua_get_thread(r, key, abbrev, function (err, result) {
 		if (err)
 			return self.emit('error', err);
-		if (_.isEmpty(pre_post)) {
+		if (!result || !result.pre || !result.pre.time) {
 			if (!opts.redirect)
 				return self.emit('nomatch');
 			r.hget('post:' + num, 'op',
@@ -1384,6 +1409,11 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			});
 			return;
 		}
+		var pre_post = result.pre;
+		var total = result.total;
+		var nums = result.replies;
+		this.active = result.active; // TODO use these
+
 		var exists = true;
 		if (pre_post.hide && !opts.showDead)
 			exists = false;
@@ -1405,21 +1435,12 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 		pre_post.num = num;
 		pre_post.time = parseInt(pre_post.time, 10);
 
-		var nums, deadNums, privNums, opPost, priv = self.y.ident.priv;
-		var abbrev = opts.abbrev || 0, total = 0;
-		async.waterfall([
-		function (next) {
-			with_body(r, key, pre_post, next);
-		},
-		function (fullPost, next) {
-			opPost = fullPost;
-			var m = r.multi();
-			var postsKey = key + ':posts';
+		var opPost = pre_post;
+		var priv = self.y.ident.priv;
 
+		if (opts.showDead || priv) {
+			var m = r.multi();
 			// order is important!
-			m.lrange(postsKey, -abbrev, -1);
-			if (abbrev)
-				m.llen(postsKey);
 			if (opts.showDead) {
 				var deadKey = key + ':dels';
 				m.lrange(deadKey, -abbrev, -1);
@@ -1433,13 +1454,16 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 					m.llen(privsKey);
 			}
 
-			m.exec(next);
-		},
-		function (rs, next) {
+			m.exec(prepared);
+		}
+		else
+			prepared();
+
+		function prepared(err, rs) {
+			if (err)
+				return self.emit('error', err);
 			// get results in the same order as before
-			nums = rs.shift();
-			if (abbrev)
-				total += parseInt(rs.shift(), 10);
+			var deadNums, privNums;
 			if (opts.showDead) {
 				deadNums = rs.shift();
 				if (abbrev)
@@ -1452,11 +1476,7 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			}
 
 			extract(opPost);
-			next(null);
-		}],
-		function (err) {
-			if (err)
-				return self.emit('error', err);
+
 			if (deadNums)
 				nums = merge_posts(nums, deadNums, abbrev);
 			if (priv) {
@@ -1467,7 +1487,7 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			var omit = Math.max(total - abbrev, 0);
 			self.emit('thread', opPost, omit);
 			self._get_each_reply(0, nums, opts);
-		});
+		}
 	});
 };
 
@@ -1811,4 +1831,22 @@ function hmget_obj(r, key, keys, cb) {
 			result[keys[i]] = rs[i];
 		cb(null, result);
 	});
+}
+
+/// converts a lua bulk response to a hash
+function unbulk(list) {
+	if (!list)
+		return null;
+	if (list.length % 2) {
+		console.warn('bad bulk:', list);
+		throw new Error('bulk of odd len ' + list.length);
+	}
+	var hash = {};
+	for (var i = 0; i < list.length; i += 2) {
+		var key = list[i];
+		if (key in hash)
+			throw new Error('bulk repeated key ' + key);
+		hash[key] = list[i+1];
+	}
+	return hash;
 }
