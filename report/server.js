@@ -32,14 +32,15 @@ function report(reporter_ident, op, num, cb) {
 	var yaku = new db.Yakusoku(board, {auth: 'Moderator'});
 	var reader = new db.Reader(yaku);
 	var kind = op == num ? 'thread' : 'post';
-	reader.get_post(kind, num, {}, function (err, post) {
-		if (err || !post) {
+	reader.get_posts(kind, [num], {}, function (err, posts) {
+		if (err || !posts[0]) {
 			if (err)
 				console.error(err);
 			send_report(reporter, board, op, num, '', [], cb);
 			return;
 		}
 
+		var post = posts[0];
 		var name = (post.name || common.ANON)
 		if (name.length > 23)
 			name = name.slice(0, 20) + '...';

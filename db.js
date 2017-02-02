@@ -1382,6 +1382,7 @@ function lua_get_thread(r, key, abbrev, cb) {
 function Reader(yakusoku) {
 	events.EventEmitter.call(this);
 	this.y = yakusoku;
+	this.postCache = {};
 	if (caps.can_administrate(yakusoku.ident))
 		this.showPrivs = true;
 }
@@ -1528,59 +1529,104 @@ function can_see_priv(priv, ident) {
 }
 
 Reader.prototype._get_each_reply = function (ix, nums, opts) {
-	var num;
+	var cache = this.postCache;
+	var limit = 20;
+
+	var privs = this.privNums;
+	function apply_privs(post) {
+		if (privs && post.num && _.contains(privs, post.num.toString()))
+			post.priv = true;
+	}
+
+	// find a run of posts that need to be fetched
+	var end;
+	for (end = ix; end < nums.length && (end - ix) < limit; end++) {
+		if (cache[nums[end]])
+			break;
+	}
+	if (ix < end) {
+		// fetch posts in the ix..end range
+		var range = [];
+		for (var i = ix; i < end; i++)
+			range.push(nums[i]);
+		var self = this;
+		this.get_posts('post', range, opts, function (err, posts) {
+			if (err)
+				return self.emit('error', err);
+			for (var i = 0; i < posts.length; i++) {
+				var post = posts[i];
+				apply_privs(post);
+				self.emit('post', post);
+			}
+			process.nextTick(self._get_each_reply.bind(self, end, nums, opts));
+		});
+		return;
+	}
+
+	// otherwise read posts from cache
 	for (; ix < nums.length; ix++) {
-		num = nums[ix];
-		var post = this.postCache && this.postCache[num];
+		var num = nums[ix];
+		var post = cache[num];
 		if (!post)
 			break;
 
 		if (this.is_visible(post, opts)) {
 			post.num = num;
 			refine_post(post);
+			apply_privs(post);
 			this.emit('post', post);
 		}
 	}
-	if (ix >= nums.length) {
+
+	if (ix < nums.length) {
+		process.nextTick(this._get_each_reply.bind(this, ix, nums, opts));
+	} else {
 		this.emit('endthread');
 		this.emit('end');
-		return;
 	}
-	var self = this;
-	this.get_post('post', num, opts, function (err, post) {
-		if (err)
-			return self.emit('error', err);
-		if (post)
-			self.emit('post', post);
-		process.nextTick(self._get_each_reply.bind(self, ix+1, nums, opts));
-	});
 };
 
-Reader.prototype.get_post = function (kind, num, opts, cb) {
+/// fetch posts in bulk. it is assumed that none of them are currently being edited
+Reader.prototype.get_posts = function (kind, nums, opts, cb) {
+	if (!nums.length)
+		return cb(null, []);
 	var r = this.y.connect();
-	var key = kind + ':' + num;
 	var self = this;
-	async.waterfall([
-	function (next) {
-		r.hgetall(key, next);
-	},
-	function (pre_post, next) {
-		var exists = self.is_visible(pre_post, opts);
-		if (!exists)
-			return next(null, null);
 
-		pre_post.num = num;
-		refine_post(pre_post);
-		with_body(r, key, pre_post, next);
-	},
-	function (post, next) {
-		if (post) {
-			var ps = self.privNums;
-			if (ps && _.contains(ps, num.toString()))
-				post.priv = true;
+	var m = r.multi();
+	for (var i = 0; i < nums.length; i++) {
+		var key = kind + ':' + nums[i];
+		m.hgetall(key);
+	}
+	m.exec(function (err, results) {
+		if (err)
+			return cb(err);
+
+		var posts = [];
+		for (var i = 0; i < results.length; i++) {
+			var post = results[i];
+			var num = nums[i];
+			post.num = num;
+			if (!self.is_visible(post, opts))
+				continue;
+
+			refine_post(post);
+			if (post.editing && !post.body) {
+				post.body = '[a bug ate this post]';
+
+				var key = kind + ':' + num + ':body';
+				r.exists(key, function (err, existed) {
+					if (err)
+						winston.warn(err);
+					else if (existed)
+						winston.warn(key + " was overlooked");
+				});
+			}
+			posts.push(post);
 		}
-		next(null, post);
-	}], cb);
+
+		cb(null, posts);
+	});
 };
 
 Reader.prototype.is_visible = function (post, opts) {
@@ -1600,6 +1646,8 @@ function refine_post(post) {
 		post.op = parse_number(post.op);
 	if (typeof post.tags == 'string')
 		post.tags = parse_tags(post.tags);
+	if (typeof post.body != 'string')
+		post.body = '';
 	if (post.state)
 		post.editing = true;
 	// extract the image-specific keys (if any) to a sub-hash
