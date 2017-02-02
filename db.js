@@ -1364,10 +1364,16 @@ function lua_get_thread(r, key, abbrev, cb) {
 		if (rs.length != 4)
 			throw new Error('get_thread.lua unexpected output');
 
+		// activePosts is a hash of hashes; needs to be unbulked on two levels
+		var activeBulk = rs[2];
+		for (var i = 1; i < activeBulk.length; i += 2)
+			activeBulk[i] = unbulk(activeBulk[i]);
+		var active = unbulk(activeBulk);
+
 		cb(null, {
 			pre: unbulk(rs[0]),
 			replies: rs[1].map(function (id) { return parseInt(id, 10); }),
-			active: rs[2].map(unbulk),
+			active: active,
 			total: rs[3],
 		});
 	});
@@ -1412,13 +1418,9 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 		var opPost = result.pre;
 		var total = result.total;
 		var nums = result.replies;
-		this.active = result.active; // TODO use these
+		self.postCache = result.active;
 
-		var exists = true;
-		if (opPost.hide && !opts.showDead)
-			exists = false;
-		else if (!can_see_priv(opPost.priv, self.ident))
-			exists = false;
+		var exists = self.is_visible(opPost, opts);
 		var tags = parse_tags(opPost.tags);
 		if (!graveyard && tags.indexOf(tag) < 0) {
 			/* XXX: Should redirect directly to correct thread */
@@ -1433,7 +1435,7 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 		}
 		self.emit('begin', opPost);
 		opPost.num = num;
-		opPost.time = parseInt(opPost.time, 10);
+		refine_post(opPost);
 
 		var priv = self.y.ident.priv;
 
@@ -1473,8 +1475,6 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 				if (abbrev)
 					total += parseInt(rs.shift(), 10);
 			}
-
-			extract(opPost);
 
 			if (deadNums)
 				nums = merge_posts(nums, deadNums, abbrev);
@@ -1533,7 +1533,17 @@ Reader.prototype._get_each_reply = function (ix, nums, opts) {
 		this.emit('end');
 		return;
 	}
-	var num = parseInt(nums[ix], 10);
+	var num = nums[ix];
+	var post = this.postCache && this.postCache[num];
+	if (post) {
+		if (this.is_visible(post, opts)) {
+			post.num = num;
+			refine_post(post);
+			this.emit('post', post);
+		}
+		process.nextTick(this._get_each_reply.bind(this, ix + 1, nums, opts));
+		return;
+	}
 	var self = this;
 	this.get_post('post', num, opts, function (err, post) {
 		if (err)
@@ -1553,23 +1563,12 @@ Reader.prototype.get_post = function (kind, num, opts, cb) {
 		r.hgetall(key, next);
 	},
 	function (pre_post, next) {
-		var exists = !(_.isEmpty(pre_post));
-		if (exists && pre_post.hide && !opts.showDead)
-			exists = false;
-		if (exists && !can_see_priv(pre_post.priv, self.ident))
-			exists = false;
+		var exists = self.is_visible(pre_post, opts);
 		if (!exists)
 			return next(null, null);
 
 		pre_post.num = num;
-		pre_post.time = parseInt(pre_post.time, 10);
-		if (kind == 'post') {
-			pre_post.op = parseInt(pre_post.op, 10);
-		}
-		else {
-			var tags = parse_tags(pre_post.tags);
-			// TODO: filter by ident eligibility and attach
-		}
+		refine_post(pre_post);
 		with_body(r, key, pre_post, next);
 	},
 	function (post, next) {
@@ -1577,11 +1576,37 @@ Reader.prototype.get_post = function (kind, num, opts, cb) {
 			var ps = self.privNums;
 			if (ps && _.contains(ps, num.toString()))
 				post.priv = true;
-			extract(post);
 		}
 		next(null, post);
 	}], cb);
 };
+
+Reader.prototype.is_visible = function (post, opts) {
+	if (_.isEmpty(post))
+		return false;
+	if (post.hide && !opts.showDead)
+		return false;
+	if (!can_see_priv(post.priv, this.ident))
+		return false;
+	return true;
+};
+
+/// turn a fresh-from-redis post hash into our expected format
+function refine_post(post) {
+	post.time = parse_number(post.time);
+	if (typeof post.op == 'string')
+		post.op = parse_number(post.op);
+	if (typeof post.tags == 'string')
+		post.tags = parse_tags(post.tags);
+	if (post.state)
+		post.editing = true;
+	// extract the image-specific keys (if any) to a sub-hash
+	extract(post);
+}
+
+function parse_number(n) {
+	return parseInt(n, 10);
+}
 
 /* Including hidden or private. Not in-order. */
 function get_all_replies_and_privs(r, op, cb) {
@@ -1786,7 +1811,7 @@ function with_body(r, key, post, callback) {
 			r.hget(key, 'body', function (err, body) {
 				if (err)
 					return callback(err);
-				post.body = body;
+				post.body = body || '';
 				callback(null, post);
 			});
 		});

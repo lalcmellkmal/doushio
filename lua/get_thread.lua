@@ -52,7 +52,9 @@ local active = {}
 for _, id in ipairs(replies) do
   if liveposts[id] then
     local key = 'post:' .. id
-    active[#active+1] = read_post(key, key..':body')
+    local post = read_post(key, key..':body')
+    active[#active+1] = id
+    active[#active+1] = post
   end
 end
 
