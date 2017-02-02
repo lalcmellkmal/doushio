@@ -126,7 +126,7 @@ S.on_all_subs = function () {
 function parse_pub_message(msg) {
 	var m = msg.match(/^(\d+)\|/);
 	var prefixLen = m[0].length;
-	var bodyLen = parseInt(m[1], 10);
+	var bodyLen = parse_number(m[1]);
 	var info = {body: msg.substr(prefixLen, bodyLen)};
 	var suffixPos = prefixLen + bodyLen;
 	if (msg.length > suffixPos)
@@ -143,8 +143,8 @@ S.on_message = function (chan, msg) {
 	}
 	msg = parsed.body;
 	var m = msg.match(/^(\d+),(\d+)/);
-	var op = parseInt(m[1], 10);
-	var kind = parseInt(m[2], 10);
+	var op = parse_number(m[1]);
+	var kind = parse_number(m[2]);
 
 	if (extra) {
 		var modified = inject_extra(op, kind, msg, extra);
@@ -320,7 +320,7 @@ function load_OPs(callback) {
 			if (err)
 				return cb(err);
 			async.forEach(threads, function (op, cb) {
-				op = parseInt(op, 10);
+				op = parse_number(op);
 				var ps = [scan_thread.bind(null,tagIndex,op)];
 				if (!config.READ_ONLY && config.THREAD_EXPIRY
 							&& tag != 'archive') {
@@ -333,14 +333,14 @@ function load_OPs(callback) {
 	}
 
 	function scan_thread(tagIndex, op, cb) {
-		op = parseInt(op, 10);
+		op = parse_number(op);
 		add_OP_tag(tagIndex, op);
 		OPs[op] = op;
 		get_all_replies_and_privs(r, op, function (err, posts) {
 			if (err)
 				return cb(err);
 			posts.forEach(function (num) {
-				OPs[parseInt(num, 10)] = op;
+				OPs[parse_number(num)] = op;
 			});
 			cb(null);
 		});
@@ -372,7 +372,7 @@ function load_OPs(callback) {
 }
 
 function expiry_queue_score(time) {
-	return Math.floor(parseInt(time, 10)/1000 + config.THREAD_EXPIRY);
+	return Math.floor(parse_number(time)/1000 + config.THREAD_EXPIRY);
 }
 
 function expiry_queue_key() {
@@ -661,7 +661,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 };
 
 Y.remove_post = function (from_thread, num, callback) {
-	num = parseInt(num);
+	num = parse_number(num);
 	var op = OPs[num];
 	if (!op)
 		return callback(Muggle('No such post.'));
@@ -838,7 +838,7 @@ Y.archive_thread = function (op, callback) {
 	function (rs, next) {
 		if (!rs[0])
 			return callback(Muggle(key + ' does not exist.'));
-		if (parseInt(rs[1], 10))
+		if (parse_number(rs[1]))
 			return callback(Muggle(key + ' is immortal.'));
 		if (rs[2])
 			return callback(Muggle(key + ' is already deleted.'));
@@ -1208,8 +1208,8 @@ Y.finish_all = function (callback) {
 					return cb(err);
 				var m = r.multi();
 				finish_off(m, key);
-				var n = parseInt(key.match(/:(\d+)$/)[1], 10);
-				op = isPost ? parseInt(op, 10) : n;
+				var n = parse_number(key.match(/:(\d+)$/)[1]);
+				op = isPost ? parse_number(op) : n;
 				self._log(m, op, common.FINISH_POST, [n]);
 				m.srem('liveposts', key);
 				m.exec(cb);
@@ -1372,7 +1372,7 @@ function lua_get_thread(r, key, abbrev, cb) {
 
 		cb(null, {
 			pre: unbulk(rs[0]),
-			replies: rs[1].map(function (id) { return parseInt(id, 10); }),
+			replies: rs[1].map(parse_number),
 			active: active,
 			total: rs[3],
 		});
@@ -1468,12 +1468,12 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 			if (opts.showDead) {
 				deadNums = rs.shift();
 				if (abbrev)
-					total += parseInt(rs.shift(), 10);
+					total += parse_number(rs.shift());
 			}
 			if (priv) {
 				privNums = rs.shift();
 				if (abbrev)
-					total += parseInt(rs.shift(), 10);
+					total += parse_number(rs.shift());
 			}
 
 			if (deadNums)
@@ -1498,7 +1498,7 @@ function merge_posts(nums, privNums, abbrev) {
 	while (!abbrev || merged.length < abbrev) {
 		if (i >= 0 && pi >= 0) {
 			var num = nums[i], pNum = privNums[pi];
-			if (parseInt(num, 10) > parseInt(pNum, 10)) {
+			if (parse_number(num) > parse_number(pNum)) {
 				merged.unshift(num);
 				i--;
 			}
@@ -1668,7 +1668,7 @@ F.get_all = function (limit) {
 		r.llen(key + ':posts', function (err, len) {
 			if (err)
 				cb(err);
-			len = parseInt(len);
+			len = parse_number(len);
 			if (len > limit)
 				return cb(null);
 			var thumbKeys = ['thumb', 'realthumb', 'src'];
@@ -1835,7 +1835,7 @@ function parse_tags(input) {
 		var m = input.match(/^(\d+):/);
 		if (!m)
 			break;
-		var len = parseInt(m[1], 10);
+		var len = parse_number(m[1]);
 		var pre = m[1].length + 1;
 		if (input.length < pre + len)
 			break;
