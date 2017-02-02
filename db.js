@@ -1528,20 +1528,22 @@ function can_see_priv(priv, ident) {
 }
 
 Reader.prototype._get_each_reply = function (ix, nums, opts) {
-	if (!nums || ix >= nums.length) {
-		this.emit('endthread');
-		this.emit('end');
-		return;
-	}
-	var num = nums[ix];
-	var post = this.postCache && this.postCache[num];
-	if (post) {
+	var num;
+	for (; ix < nums.length; ix++) {
+		num = nums[ix];
+		var post = this.postCache && this.postCache[num];
+		if (!post)
+			break;
+
 		if (this.is_visible(post, opts)) {
 			post.num = num;
 			refine_post(post);
 			this.emit('post', post);
 		}
-		process.nextTick(this._get_each_reply.bind(this, ix + 1, nums, opts));
+	}
+	if (ix >= nums.length) {
+		this.emit('endthread');
+		this.emit('end');
 		return;
 	}
 	var self = this;
@@ -1550,7 +1552,7 @@ Reader.prototype._get_each_reply = function (ix, nums, opts) {
 			return self.emit('error', err);
 		if (post)
 			self.emit('post', post);
-		self._get_each_reply(ix + 1, nums, opts);
+		process.nextTick(self._get_each_reply.bind(self, ix+1, nums, opts));
 	});
 };
 
