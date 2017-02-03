@@ -317,9 +317,7 @@ $DOC.on('mouseenter', '.tweet', function (event) {
 			if (m)
 				prefix = m[1];
 
-			// scrape the tweet text inside the <p/>
-			var textNode = text_child($p);
-			var text = textNode ? textNode.textContent : $p.text();
+			var text = scrape_tweet_p($p);
 			with_dom(function () {
 				var expanded = prefix + ' \u00b7 ' + text;
 				$target.data('tweet-expanded', expanded);
@@ -408,6 +406,30 @@ function fetch_tweet($target, cb) {
 	with_dom(function () {
 		node.textContent = orig + '...';
 	});
+}
+
+function scrape_tweet_p($p) {
+	var bits = $p.contents();
+	var text = "";
+	var i;
+	for (i = 0; i < bits.length; i++) {
+		var node = bits[i];
+		if (node.nodeType == 3)
+			text += node.textContent;
+		else if (node.nodeType == 1) {
+			if (node.tagName == 'A')
+				text += node.textContent;
+			else
+				break;
+		}
+		else
+			break;
+	}
+	if (i < bits.length)
+		text += ' \u2026';
+	if (!text)
+		text = $p.text();
+	return text;
 }
 
 var TW_CB = {};
