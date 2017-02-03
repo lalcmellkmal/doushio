@@ -481,8 +481,8 @@ web.resource(/^\/(\w+)\/(\d+)$/, function (req, params, cb) {
 		cb(404);
 		yaku.disconnect();
 	});
-	reader.once('redirect', function (op) {
-		redirect_thread(cb, num, op);
+	reader.once('redirect', function (op, tag) {
+		redirect_thread(cb, num, op, tag);
 		yaku.disconnect();
 	});
 	reader.once('begin', function (preThread) {

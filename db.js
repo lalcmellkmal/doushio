@@ -1424,9 +1424,10 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 		var exists = self.is_visible(opPost, opts);
 		var tags = parse_tags(opPost.tags);
 		if (!graveyard && tags.indexOf(tag) < 0) {
-			/* XXX: Should redirect directly to correct thread */
-			if (opts.redirect)
-				return self.emit('redirect', num, tags[0]);
+			if (opts.redirect) {
+				var op = OPs[num];
+				return self.emit('redirect', op || num, tags[0]);
+			}
 			else
 				exists = false;
 		}
