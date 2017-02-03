@@ -193,7 +193,7 @@ var OS = OneeSama.prototype;
 
 var break_re = new RegExp("(\\S{" + DEFINES.WORD_LENGTH_LIMIT + "})");
 /* internal refs, embeds */
-var ref_re = />>(\d+|>\/watch\?v=[\w-]{11}(?:#t=[\dhms]{1,9})?|>\/soundcloud\/[\w-]{1,40}\/[\w-]{1,80}|>\/@\w{1,15}\/\d{4,20}|>\/a\/\d{0,10})/;
+var ref_re = />>(\d+|>\/watch\?v=[\w-]{11}(?:#t=[\dhms]{1,9})?|>\/soundcloud\/[\w-]{1,40}\/[\w-]{1,80}|>\/@\w{1,15}\/\d{4,20}(?:\?s=\d+)?|>\/a\/\d{0,10})/;
 
 OS.hook = function (name, func) {
 	var hs = this.hooks[name];

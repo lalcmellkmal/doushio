@@ -313,7 +313,7 @@ $DOC.on('mouseenter', '.tweet', function (event) {
 		if ($p.length) {
 			// chop the long ID number off our ref
 			var prefix = orig;
-			var m = /^(.+)\/\d{4,20}$/.exec(prefix);
+			var m = /^(.+)\/\d{4,20}(?:s=\d+)?$/.exec(prefix);
 			if (m)
 				prefix = m[1];
 
@@ -366,9 +366,11 @@ function fetch_tweet($target, cb) {
 	if (cached)
 		return cb(null, {tweet: cached, node: node});
 
-	var m = $target.attr('href').match(twitter_url_re);
+	var tweet_url = $target.attr('href');
+	var m = tweet_url.match(twitter_url_re);
 	if (!m)
 		return cb('invalid tweet ref', {node: node});
+	var handle = m[1];
 	var id = m[2];
 
 	// if this request is already in-flight, just wait on the result
@@ -378,23 +380,28 @@ function fetch_tweet($target, cb) {
 		flight.callbacks.push(cb);
 		return;
 	}
-	// otherwise, make the call
-	var handle = setTimeout(tweet_request_expired.bind(null, id), 5000);
-	TW_CB[id] = {node: node, callbacks: [cb], timeout: handle};
+
+	// chop the prefix off the url and add our own
+	var chop = tweet_url.indexOf(handle);
+	if (chop < 0)
+		return;
+	var our_url = '../outbound/tweet/' + tweet_url.substr(chop);
+
+	// we're ready, make the call
+	TW_CB[id] = {node: node, callbacks: [cb]};
 	$target.data('tweet', {inflight: id});
 
-	var params = {
-		id: id,
-		callback: 'tweet_callback',
-		hide_thread: true,
-		omit_script: true,
-		link_color: '%ffaa99',
-		theme: 'light', // TODO tie into current theme
-	};
-
+	var theme = 'light'; // TODO tie into current theme
 	$.ajax({
-		url: 'https://api.twitter.com/1/statuses/oembed.json?' + $.param(params),
-		dataType: 'jsonp',
+		url: our_url,
+		data: {theme: theme},
+		dataType: 'json',
+		success: function (json) {
+			got_tweet(json, id);
+		},
+		error: function (xhr, stat, error) {
+			failed_tweet(error, id);
+		},
 	});
 
 	var orig = $target.data('tweet-ref') || node.textContent;
@@ -405,7 +412,7 @@ function fetch_tweet($target, cb) {
 
 var TW_CB = {};
 
-function tweet_request_expired(id) {
+function failed_tweet(err, id) {
 	var req = TW_CB[id];
 	if (!req)
 		return;
@@ -415,14 +422,12 @@ function tweet_request_expired(id) {
 		req.node = null;
 		var payload = {node: node};
 		while (req.callbacks.length)
-			req.callbacks.shift()('timed out', payload);
+			req.callbacks.shift()(err || 'offline?', payload);
 	}
-	req.timeout = 0;
 	req.callbacks = [];
 }
 
-window.tweet_callback = function (tweet) {
-	var id = /\/(\d+)$/.exec(tweet.url)[1];
+function got_tweet(tweet, id) {
 	var saved = TW_CB[id];
 	if (!saved) {
 		console.warn('tweet callback for non-pending tweet', tweet);
@@ -434,10 +439,7 @@ window.tweet_callback = function (tweet) {
 	saved.node = null;
 	while (saved.callbacks.length)
 		saved.callbacks.shift()(null, payload);
-	if (saved.timeout)
-		clearTimeout(saved.timeout);
-	saved.timeout = 0;
-};
+}
 
 var TW_WG_SCRIPT;
 

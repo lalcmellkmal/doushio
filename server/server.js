@@ -17,6 +17,7 @@ var _ = require('../lib/underscore'),
     Muggle = require('../etc').Muggle,
     okyaku = require('./okyaku'),
     render = require('./render'),
+    request = require('request'),
     STATE = require('./state'),
     tripcode = require('./../tripcode/tripcode'),
     urlParse = require('url').parse,
@@ -618,6 +619,65 @@ web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {
 	if (thread)
 		url += 'thread/' + thread;
 	cb(null, 303.1, url);
+});
+
+var TWEET_CACHE = {};
+var TWEET_CACHE_LEN = 0;
+
+function expire_tweet(key) {
+	if (TWEET_CACHE[key]) {
+		delete TWEET_CACHE[key];
+		TWEET_CACHE_LEN--;
+	}
+}
+
+web.resource(/^\/outbound\/tweet\/(\w{1,15}\/status\/\d{4,20})$/,
+function (req, params, cb) {
+	var url = 'https://twitter.com/' + params[1];
+	if (/^\d+$/.test(req.query.s))
+		url += '?s=' + req.query.s;
+	var theme = req.query.theme == 'dark' ? 'dark' : 'light';
+	var params = {
+		url: url,
+		omit_script: true,
+		theme: theme,
+	};
+	var key = 'tw:'+url;
+	if (TWEET_CACHE[key])
+		return cb(null, 'ok', TWEET_CACHE[key]);
+
+	request.get({
+		uri: 'https://publish.twitter.com/oembed',
+		qs: params,
+		json: true,
+	}, function (err, twResp, json) {
+		if (err)
+			return cb(err);
+		var code = twResp.statusCode;
+		if (code < 200 || code >= 300) {
+			if (code == 404)
+				cb(404);
+			else
+				cb('twitter returned ' + code);
+			return;
+		}
+		if (!json.html)
+			return cb('unexpected tweet form');
+
+		if (!TWEET_CACHE[key] && TWEET_CACHE_LEN < 50) {
+			TWEET_CACHE[key] = {json: json};
+			TWEET_CACHE_LEN++;
+			setTimeout(expire_tweet.bind(null, key), 600*1000);
+		}
+
+		cb(null, 'ok', {json: json});
+	});
+}, function (req, resp) {
+	resp = write_gzip_head(req, resp, {
+		'Content-Type': 'application/json',
+		'Cache-Control': config.DEBUG ? 'no-cache' : 'public, max-age=600',
+	});
+	resp.end(JSON.stringify(this.json));
 });
 
 web.route_get_auth(/^\/dead\/(src|thumb|mid)\/(\w+\.\w{3})$/,
