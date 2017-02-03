@@ -53,6 +53,8 @@ function handle_request(req, resp) {
 		var m = req.url.match(route.pattern);
 		if (m) {
 			route.handler(req, resp, m);
+			if (config.DEBUG)
+				winston.verbose(route.method.toUpperCase() + ' ' + req.url);
 			return;
 		}
 	}
@@ -72,6 +74,8 @@ function handle_request(req, resp) {
 		return;
 	}
 	render_404(resp);
+	if (config.DEBUG)
+		winston.verbose('404 ' + req.url + ' fallthrough');
 }
 
 function handle_resource(req, resp, resource) {
@@ -86,15 +90,21 @@ function handle_resource(req, resp, resource) {
 	var cookie = auth.extract_login_cookie(req.cookies);
 	if (cookie) {
 		auth.check_cookie(cookie, function (err, ident) {
-			if (err && !resource.authPassthrough)
+			if (err && !resource.authPassthrough) {
+				if (config.DEBUG)
+					winston.verbose('DENY ' + req.url + ' ('  + err + ')');
 				return forbidden(resp, 'No cookie.');
+			}
 			else if (!err)
 				_.extend(req.ident, ident);
 			resource.head.apply(null, args);
 		});
 	}
-	else if (!resource.authPassthrough)
+	else if (!resource.authPassthrough) {
+		if (config.DEBUG)
+			winston.verbose('DENY ' + req.url);
 		render_404(resp);
+	}
 	else
 		resource.head.apply(null, args);
 	return true;
@@ -102,14 +112,22 @@ function handle_resource(req, resp, resource) {
 
 function resource_second_handler(req, resp, resource, err, act, arg) {
 	var method = req.method.toLowerCase();
+	var log = config.DEBUG;
 	if (err) {
-		if (err == 404)
+		if (err == 404) {
+			if (log)
+				winston.verbose('404 ' + req.url);
 			return render_404(resp);
+		}
 		else if (err != 500)
 			winston.error(err);
+		else if (log)
+			winston.verbose('500 ' + req.url);
 		return render_500(resp);
 	}
 	else if (act == 'ok') {
+		if (log)
+			winston.verbose(method.toUpperCase() + ' ' + req.url + ' 200');
 		if (method == 'head') {
 			var headers = (arg && arg.headers) || vanillaHeaders;
 			resp.writeHead(200, headers);
@@ -131,12 +149,16 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 	else if (act == 304) {
 		resp.writeHead(304);
 		resp.end();
+		if (log)
+			winston.verbose('304 ' + req.url);
 	}
 	else if (act == 'redirect' || (act >= 300 && act < 400)) {
 		var headers = {Location: arg};
 		if (act == 'redirect')
 			act = 303;
-		else if (act == 303.1) {
+		if (log)
+			winston.verbose(act + ' ' + req.url + ' to ' + arg);
+		if (act == 303.1) {
 			act = 303;
 			headers['X-Robots-Tag'] = 'nofollow';
 		}
@@ -144,6 +166,8 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 		resp.end();
 	}
 	else if (act == 'redirect_js') {
+		if (log)
+			winston.verbose('303.js ' + req.url + ' to ' + arg);
 		if (method == 'head') {
 			resp.writeHead(303, {Location: arg});
 			resp.end();
