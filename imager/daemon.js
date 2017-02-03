@@ -181,8 +181,30 @@ IU.process = function () {
 	this.status('Verifying...');
 	if (config.VIDEO_EXTS.indexOf(image.ext) >= 0)
 		video_still(image.path, image.ext, this.verify_video.bind(this));
+	else if (image.ext == '.jpg' && jpegtranBin && jheadBin)
+		jobs.schedule(new AutoRotateJob(image.path), this.verify_image.bind(this));
 	else
 		this.verify_image();
+};
+
+function AutoRotateJob(src) {
+	jobs.Job.call(this);
+	this.src = src;
+}
+util.inherits(AutoRotateJob, jobs.Job);
+
+AutoRotateJob.prototype.describe_job = function () {
+	return "jhead+jpegtran auto rotation of " + this.src;
+};
+
+AutoRotateJob.prototype.perform_job = function () {
+	var self = this;
+	child_process.execFile(jheadBin, ['-autorot', this.src], function (err, stdout, stderr) {
+		// if it failed, keep calm and thumbnail on
+		if (err)
+			winston.warn('jhead: ' + (stderr || err));
+		self.finish_job(null);
+	});
 };
 
 function StillJob(src, ext) {
@@ -309,7 +331,9 @@ IU.verify_video = function (err, info) {
 	});
 };
 
-IU.verify_image = function () {
+IU.verify_image = function (err) {
+	if (err)
+		winston.error(err);
 	var image = this.image;
 	this.tagged_path = image.ext.replace('.', '') + ':' + image.path;
 	var checks = {
@@ -494,20 +518,26 @@ IU.read_image_filesize = function (callback) {
 function which(name, callback) {
 	child_process.exec('which ' + name, function (err, stdout, stderr) {
 		if (err)
-			throw err;
-		callback(stdout.trim());
+			callback(err);
+		else
+			callback(null, stdout.trim());
 	});
 }
 
 /* Look up imagemagick paths */
 var identifyBin, convertBin;
-which('identify', function (bin) { identifyBin = bin; });
-which('convert', function (bin) { convertBin = bin; });
+which('identify', function (err, bin) { if (err) throw err; identifyBin = bin; });
+which('convert', function (err, bin) { if (err) throw err; convertBin = bin; });
 
 var ffmpegBin;
 if (config.VIDEO) {
-	which('ffmpeg', function (bin) { ffmpegBin = bin; });
+	which('ffmpeg', function (err, bin) { if (err) throw err; ffmpegBin = bin; });
 }
+
+/* optional JPEG auto-rotation */
+var jpegtranBin, jheadBin;
+which('jpegtran', function (err, bin) { if (!err && bin) jpegtranBin = bin; });
+which('jhead', function (err, bin) { if (!err && bin) jheadBin = bin; });
 
 function identify(taggedName, callback) {
 	var m = taggedName.match(/^(\w{3,4}):/);

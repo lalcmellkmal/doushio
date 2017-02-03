@@ -29,6 +29,7 @@ Dependencies:
 * node.js + npm
 * redis
 * ffmpeg 2.2+ if supporting WebM
+* jhead and jpegtran optionally, for EXIF autorotation
 
 Optional npm deps for various features:
 
