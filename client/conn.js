@@ -1,6 +1,6 @@
 (function () {
 
-var socket, attempts, attemptTimer;
+var socket, attempts, attemptTimer, pingTimer;
 
 window.send = function (msg) {
 	// need deferral or reporting on these lost messages...
@@ -18,7 +18,11 @@ window.send = function (msg) {
 	socket.send(msg);
 };
 
+var pong = '[[0,' + PING + ']]';
+
 function on_message(e) {
+	if (e == pong)
+		return;
 	if (DEBUG)
 		console.log('>', e.data);
 	var msgs = JSON.parse(e.data);
@@ -77,6 +81,9 @@ connSM.act('conn, reconn + open -> syncing', function () {
 	sync_status('Syncing...', false);
 	CONN_ID = random_id();
 	send([SYNCHRONIZE, CONN_ID, BOARD, syncs, BUMP, document.cookie]);
+	if (pingTimer)
+		clearInterval(pingTimer);
+	pingTimer = setInterval(ping, 25000);
 });
 
 connSM.act('syncing + sync -> synced', function () {
@@ -105,6 +112,10 @@ connSM.act('* + close -> dropped', function (e) {
 	if (attemptTimer) {
 		clearTimeout(attemptTimer);
 		attemptTimer = 0;
+	}
+	if (pingTimer) {
+		clearInterval(pingTimer);
+		pingTimer = 0;
 	}
 	sync_status('Dropped.', true);
 
@@ -155,8 +166,18 @@ function window_focused() {
 			connSM.feed('close');
 			return;
 		}
+		ping();
 	}
 	connSM.feed('retry');
+}
+
+function ping() {
+	if (socket.readyState == SockJS.OPEN)
+		socket.send('['+PING+']');
+	else if (pingTimer) {
+		clearInteval(pingTimer);
+		pingTimer = 0;
+	}
 }
 
 (function () {

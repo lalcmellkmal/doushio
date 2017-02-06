@@ -119,6 +119,8 @@ function spill_page() {
 
 var dispatcher = {};
 
+dispatcher[PING] = function (msg) {};
+
 dispatcher[INSERT_POST] = function (msg) {
 	var orig_focus = get_focus();
 	var num = msg[0];

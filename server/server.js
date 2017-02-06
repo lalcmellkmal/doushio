@@ -46,6 +46,13 @@ var dispatcher = okyaku.dispatcher;
 var escape = common.escape_html;
 var safe = common.safe;
 
+dispatcher[common.PING] = function (msg, client) {
+	if (msg.length)
+		return false;
+	client.send([0, common.PING]);
+	return true;
+};
+
 dispatcher[common.SYNCHRONIZE] = function (msg, client) {
 	function checked(err, ident) {
 		if (!err)
