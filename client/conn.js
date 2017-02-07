@@ -175,7 +175,7 @@ function ping() {
 	if (socket.readyState == SockJS.OPEN)
 		socket.send('['+PING+']');
 	else if (pingTimer) {
-		clearInteval(pingTimer);
+		clearInterval(pingTimer);
 		pingTimer = 0;
 	}
 }
