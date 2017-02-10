@@ -86,9 +86,6 @@ ComposerView.prototype.word_filter = function (words) {
 	});
 };
 
-var $b = $('body');
-var back = $b.css('background');
-$b.css('background', 'black');
-setTimeout(function () { $b.css('background', back); }, 200);
+flash_bg('black');
 
 })();

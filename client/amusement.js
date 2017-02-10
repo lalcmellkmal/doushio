@@ -95,5 +95,11 @@ dispatcher[EXECUTE_JS] = function (msg, op) {
 	}
 };
 
+window.flash_bg = function (color) {
+	var $b = $('body');
+	var back = $b.css('background');
+	$b.css('background', color);
+	setTimeout(function () { $b.css('background', back); }, 200);
+};
 
 })();

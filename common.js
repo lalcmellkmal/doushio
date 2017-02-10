@@ -316,7 +316,7 @@ OS.fragment = function (frag) {
 			var line = lines[l];
 			if (l % 2)
 				this.iku(safe('<br>'), DEFINES.S_BOL);
-			else if (state[0] === DEFINES.S_BOL && line[0] == '>')
+			else if (state[0] === DEFINES.S_BOL && (line[0]=='>' || line[0]=='\uff1e'))
 				this.iku(line, DEFINES.S_QUOTE);
 			else if (line)
 				this.iku(line, q ? DEFINES.S_QUOTE
