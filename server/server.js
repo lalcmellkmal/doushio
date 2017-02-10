@@ -80,11 +80,7 @@ function synchronize(msg, client) {
 	}
 	client.id = id;
 	STATE.clients[id] = client;
-	if (client.synced) {
-		//winston.warn("Client tried to sync twice");
-		/* Sync logic is buggy; allow for now */
-		//return true;
-	}
+
 	if (!caps.can_access_board(client.ident, board))
 		return false;
 	var dead_threads = [], count = 0, op;
