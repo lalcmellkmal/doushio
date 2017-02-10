@@ -72,7 +72,7 @@ function save_ident() {
 		var name = $name.val(), email = $email.val();
 		if (email == 'misaki') {
 			$email.val('');
-			yepnope(mediaURL + 'js/login.js?v=2');
+			$.getScript(mediaURL + 'js/login.js');
 			email = false;
 		}
 		else if (is_sage(email) && !is_noko(email))

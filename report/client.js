@@ -185,7 +185,7 @@ menuHandlers.Report = function (post) {
 	}
 	PANEL = new ReportPanel({model: model});
 	PANEL.render().$el.appendTo('body');
-	yepnope({load: ajaxJs, callback: function () {
+	$.getScript(ajaxJs, function () {
 		if (window.Recaptcha)
 			model.request_new();
 		else
@@ -193,7 +193,7 @@ menuHandlers.Report = function (post) {
 				status: 'error',
 				error: "Couldn't load reCATPCHA.",
 			});
-	}});
+	});
 };
 
 dispatcher[REPORT_POST] = function (msg, op) {

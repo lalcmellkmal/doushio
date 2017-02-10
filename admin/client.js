@@ -1,7 +1,7 @@
 /* NOTE: This file is processed by server/state.js
          and served by server/server.js (to auth'd users only) */
 
-yepnope(mediaURL + 'css/mod.css?v=1');
+$('<link>', {rel: 'stylesheet', type: 'text/css', href: mediaURL+'css/mod.css'}).appendTo('head');
 
 var $selectButton, $controls;
 window.loggedInUser = IDENT.user;
