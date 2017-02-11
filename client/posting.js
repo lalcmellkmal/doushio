@@ -60,12 +60,20 @@ $DOC.on('click', 'aside a', _.wrap(function () {
 
 $DOC.on('keydown', handle_shortcut);
 
-var vapor = 0, wombo = 0;
+var vapor = 0, wombo = 0, eject = 0;
 
 function handle_shortcut(event) {
 	var k = event.which;
 	if (vapor < 0 || wombo < 0) {
-		// already active
+		if (event.shiftKey && k == [69,74,69,67,84,49][eject]) {
+			if (++eject >= 6) {
+				vapor = wombo = eject = 0;
+				ComposerView.prototype.word_filter = function (w) { return w; };
+				flash_bg('white');
+			}
+		}
+		else
+			eject = 0;
 	}
 	else if (event.shiftKey && k > 85 && k < 88) {
 		if (k == 86 && ++vapor > 10) {
@@ -73,6 +81,8 @@ function handle_shortcut(event) {
 			if (postForm)
 				postForm.$input.val('');
 			flash_bg('#f98aa5');
+			event.stopImmediatePropagation();
+			event.preventDefault();
 		}
 		if (k == 87 && ++wombo > 10) {
 			wombo = -1;
