@@ -36,6 +36,7 @@ DEFINES.MAX_POST_LINES = 30;
 DEFINES.MAX_POST_CHARS = 2000;
 DEFINES.WORD_LENGTH_LIMIT = 120;
 
+/// OneeSama.state[0] flags
 DEFINES.S_NORMAL = 0;
 DEFINES.S_BOL = 1;
 DEFINES.S_QUOTE = 2;
@@ -220,6 +221,7 @@ function override(obj, orig, upgrade) {
 	};
 }
 
+/// converts one >>ref to html
 OS.red_string = function (ref) {
 	var prefix = ref.slice(0, 3);
 	var dest, linkClass;
@@ -247,12 +249,14 @@ OS.red_string = function (ref) {
 	this.callback(new_tab_link(encodeURI(dest), '>>' + ref, linkClass));
 };
 
+/// 3rd tokenization stage; breaks text into chunks and >>refs
 OS.break_heart = function (frag) {
 	if (frag.safe)
 		return this.callback(frag);
+	// break long words
 	var bits = frag.split(break_re);
 	for (var i = 0; i < bits.length; i++) {
-		/* anchor refs */
+		// anchor >>refs
 		var morsels = bits[i].split(ref_re);
 		for (var j = 0; j < morsels.length; j++) {
 			var m = morsels[j];
@@ -268,6 +272,7 @@ OS.break_heart = function (frag) {
 	}
 };
 
+/// 2nd tokenization stage; as we transition our state[0] flag, emits html tags as necessary
 OS.iku = function (token, to) {
 	var state = this.state;
 	if (state[0] == DEFINES.S_QUOTE && to != DEFINES.S_QUOTE)
@@ -299,6 +304,7 @@ OS.iku = function (token, to) {
 	state[0] = to;
 }
 
+/// 1st tokenization stage, breaking up [spoiler]s, >quotes, and line breaks
 OS.fragment = function (frag) {
 	var chunks = frag.split(/(\[\/?spoiler\])/i);
 	var state = this.state;
@@ -325,8 +331,11 @@ OS.fragment = function (frag) {
 	}
 };
 
+/// converts one post body to HTML
 OS.karada = function (body) {
 	var output = [];
+	// state[0] = output mode
+	// state[1] = number of spoiler tags we're inside
 	this.state = [DEFINES.S_BOL, 0];
 	this.callback = function (frag) { output.push(frag); }
 	this.fragment(body);
@@ -394,9 +403,13 @@ function readable_dice(bit, d) {
 // *Not* recommended. Use at your own risk.
 var LINKIFY = false;
 
+/// 4th tokenization stage; populates dice rolls
 OS.geimu = function (text) {
 	if (!this.dice) {
-		LINKIFY ? this.linkify(text) : this.callback(text);
+		if (LINKIFY)
+			return this.linkify(test);
+		// finally! only plaintext remains
+		this.callback(text);
 		return;
 	}
 
