@@ -6,6 +6,10 @@ function inject(frag) {
 		dest = dest.children('em:last');
 	if (this.strong)
 		dest = dest.children('strong:last');
+	if (this.sup_level) {
+		for (var i = 0; i < this.sup_level; i++)
+			dest = dest.children('sup:last');
+	}
 	var out = null;
 	if (frag.safe) {
 		var m = frag.safe.match(/^<(\w+)>$/);

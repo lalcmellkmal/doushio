@@ -399,17 +399,10 @@ function readable_dice(bit, d) {
 	return bit + (eq ? ' = ' : '') + sum + ')';
 }
 
-// Convert text URLs to clickable links
-// *Not* recommended. Use at your own risk.
-var LINKIFY = false;
-
 /// 4th tokenization stage; populates dice rolls
 OS.geimu = function (text) {
 	if (!this.dice) {
-		if (LINKIFY)
-			return this.linkify(test);
-		// finally! only plaintext remains
-		this.callback(text);
+		this.kinpira(text);
 		return;
 	}
 
@@ -417,13 +410,13 @@ OS.geimu = function (text) {
 	for (var i = 0; i < bits.length; i++) {
 		var bit = bits[i];
 		if (!(i % 2) || !parse_dice(bit)) {
-			LINKIFY ? this.linkify(bit) : this.callback(bit);
+			this.kinpira(bit);
 		}
 		else if (this.queueRoll) {
 			this.queueRoll(bit);
 		}
 		else if (!this.dice[0]) {
-			LINKIFY ? this.linkify(bit) : this.callback(bit);
+			this.kinpira(bit);
 		}
 		else {
 			var d = this.dice.shift();
@@ -436,9 +429,47 @@ OS.geimu = function (text) {
 	}
 };
 
+/// 5th tokenization stage; parses ^s
+OS.kinpira = function (text) {
+	if (!/^/.test(text) || /^([^]_|:[^])/.test(text)) {
+		if (LINKIFY)
+			this.linkify(text);
+		else
+			this.callback(text);
+		return;
+	}
+	var bits = text.split('^');
+	// remove trailing ^s
+	while (bits.length && bits[bits.length-1] == '')
+		bits.pop();
+
+	var soup = safe('<sup>');
+	this.sup_level = 0;
+	for (var i = 0; i < bits.length; i++) {
+		if (bits[i])
+			this.callback(bits[i]);
+		if (i + 1 < bits.length && i < 5) {
+			// if there's more text, open a <sup>
+			this.callback(soup);
+			this.sup_level++;
+		}
+	}
+	// close all the sups we opened
+	var n = this.sup_level;
+	this.sup_level = 0;
+	soup = safe('</sup>');
+	for (var i = 0; i < n; i++)
+		this.callback(soup);
+};
+
+// Convert text URLs to clickable links
+// *Not* recommended. Use at your own risk.
+var LINKIFY = false;
+
+/// optional 6th tokenization stage
 if (LINKIFY) { OS.linkify = function (text) {
 
-	var bits = text.split(/(https?:\/\/[^\s"<>]*[^\s"<>'.,!?:;])/);
+	var bits = text.split(/(https?:\/\/[^\s"<>^]*[^\s"<>'.,!?:;^])/);
 	for (var i = 0; i < bits.length; i++) {
 		if (i % 2) {
 			var e = escape_html(bits[i]);
