@@ -431,14 +431,14 @@ OS.geimu = function (text) {
 
 /// 5th tokenization stage; parses ^s
 OS.kinpira = function (text) {
-	if (!/^/.test(text) || /^([^]_|:[^])/.test(text)) {
+	if (!/[＾^]/.test(text) || /^([＾^]_|:[＾^])/.test(text)) {
 		if (LINKIFY)
 			this.linkify(text);
 		else
 			this.callback(text);
 		return;
 	}
-	var bits = text.split('^');
+	var bits = text.split(/[＾^]/);
 	// remove trailing ^s
 	while (bits.length && bits[bits.length-1] == '')
 		bits.pop();
