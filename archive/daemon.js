@@ -78,7 +78,7 @@ function clean_up() {
 	at_next_minute(clean_up);
 }
 
-if (require.main === module) {
+if (require.main === module) process.nextTick(function () {
 	connect();
 	var args = process.argv;
 	if (args.length == 3) {
@@ -89,4 +89,4 @@ if (require.main === module) {
 		});
 	}
 	at_next_minute(clean_up);
-}
+});
