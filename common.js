@@ -347,7 +347,7 @@ OS.karada = function (body) {
 	return output;
 }
 
-var dice_re = /(#flip|#8ball|#\d{0,2}d\d{1,4}(?:[+-]\d{1,4})?)/i;
+var dice_re = /(#flip|#8ball|#imfey|#\d{0,2}d\d{1,4}(?:[+-]\d{1,4})?)/i;
 exports.dice_re = dice_re;
 
 var EIGHT_BALL = [
@@ -355,11 +355,40 @@ var EIGHT_BALL = [
 	'No',
 	'Maybe',
 	'Ara ara',
+	'Why this',
+	'Help',
+	'git gud',
+	'Okay',
+	'My condolences',
+	'Praise be',
+	'EEEEEEH?!',
+	'Try again never',
+	'100%',
+	'Can you repeat the question',
+	'lol',
+	'0.1%',
+	'agreedo',
+	'nope.avi',
+	'Would you kindly?',
+];
+
+var IMFEY = [
+	'wowme2',
+	'u do u',
+	"go get 'em champ",
+	'my child...',
+	'✨',
+	'Kooloo Limpah!',
+	'Invigorating.',
+	'sproink',
+	'elwind!',
 ];
 
 function parse_dice(frag) {
 	if (frag == '#flip')
 		return {n: 1, faces: 2};
+	if (frag == '#imfey')
+		return {n: 1, faces: IMFEY.length};
 	if (frag == '#8ball')
 		return {n: 1, faces: EIGHT_BALL.length};
 	var m = frag.match(/^#(\d*)d(\d+)([+-]\d+)?$/i);
@@ -378,6 +407,8 @@ exports.parse_dice = parse_dice;
 function readable_dice(bit, d) {
 	if (bit == '#flip')
 		return '#flip (' + (d[1] == 2) + ')';
+	if (bit == '#imfey')
+		return '#imfey (' + IMFEY[d[1] - 1] + ')';
 	if (bit == '#8ball')
 		return '#8ball (' + EIGHT_BALL[d[1] - 1] + ')';
 	var f = d[0], n = d.length, b = 0;
