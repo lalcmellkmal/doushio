@@ -288,22 +288,17 @@ OS.iku = function (token, to) {
 			token = '';
 		this.callback(safe('</h4>'));
 	}
-	switch (to) {
-	case DEFINES.S_BIG:
-		if (!(state[0] & DEFINES.S_BIG)) {
-			this.callback(safe('<h4>'));
-			state[0] |= DEFINES.S_BIG;
-		}
-		this.break_heart(token);
-		break;
-	case DEFINES.S_QUOTE:
-		if (!(state[0] & DEFINES.S_QUOTE)) {
-			this.callback(safe('<em>'));
-			state[0] |= DEFINES.S_QUOTE;
-		}
-		this.break_heart(token);
-		break;
-	case 'SPOIL':
+
+	if (to & DEFINES.S_BIG && !(state[0] & DEFINES.S_BIG)) {
+		this.callback(safe('<h4>'));
+		state[0] |= DEFINES.S_BIG;
+	}
+	if (to & DEFINES.S_QUOTE && !(state[0] & DEFINES.S_QUOTE)) {
+		this.callback(safe('<em>'));
+		state[0] |= DEFINES.S_QUOTE;
+	}
+
+	if (to == 'SPOIL') {
 		if (token[1] == '/') {
 			state[1]--;
 			this.callback(safe('</del>'));
@@ -314,11 +309,11 @@ OS.iku = function (token, to) {
 			this.callback(safe(del.html));
 			state[1]++;
 		}
-		break;
-	default:
-		this.break_heart(token);
-		break;
 	}
+	else {
+		this.break_heart(token);
+	}
+
 	state[0] = to;
 }
 
@@ -341,8 +336,12 @@ OS.fragment = function (frag) {
 			var is_bol = state[0] === DEFINES.S_BOL;
 			if (l % 2)
 				this.iku(safe('<br>'), DEFINES.S_BOL);
-			else if (is_bol && !state[1] && /^[#＃]{2}[^#＃]/.test(line))
-				this.iku(line.slice(2), DEFINES.S_BIG);
+			else if (is_bol && !state[1] && /^[#＃]{2}[^#＃]/.test(line)) {
+				var to = DEFINES.S_BIG;
+				if (/[>＞]/.test(line[2]))
+					to |= DEFINES.S_QUOTE;
+				this.iku(line.slice(2), to);
+			}
 			else if (is_bol && /^[>＞]/.test(line))
 				this.iku(line, DEFINES.S_QUOTE);
 			else if (line)
