@@ -42,6 +42,13 @@ DEFINES.S_BOL = 1;
 DEFINES.S_QUOTE = 2;
 DEFINES.S_SPOIL = 3;
 
+function initial_state() {
+	// state[0] = output mode
+	// state[1] = number of spoiler tags we're inside
+	return [DEFINES.S_BOL, 0];
+}
+exports.initial_state = initial_state;
+
 if (typeof mediaURL == 'undefined' || !mediaURL)
 	mediaURL = imagerConfig.MEDIA_URL;
 
@@ -334,9 +341,7 @@ OS.fragment = function (frag) {
 /// converts one post body to HTML
 OS.karada = function (body) {
 	var output = [];
-	// state[0] = output mode
-	// state[1] = number of spoiler tags we're inside
-	this.state = [DEFINES.S_BOL, 0];
+	this.state = initial_state();
 	this.callback = function (frag) { output.push(frag); }
 	this.fragment(body);
 	this.callback = null;

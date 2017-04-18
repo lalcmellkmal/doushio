@@ -268,7 +268,7 @@ initialize: function (dest) {
 	});
 	this.imouto.callback = inject;
 	this.imouto.op = THREAD;
-	this.imouto.state = [S_BOL, 0];
+	this.imouto.state = initial_state();
 	this.imouto.buffer = this.buffer;
 	this.imouto.hook('spoilerTag', touchable_spoiler_tag);
 	oneeSama.trigger('imouto', this.imouto);

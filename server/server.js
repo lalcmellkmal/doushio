@@ -805,7 +805,7 @@ function allocate_post(msg, client, callback) {
 		if (common.is_noko(post.email))
 			delete post.email;
 	}
-	post.state = [common.S_BOL, 0];
+	post.state = common.initial_state();
 
 	if ('auth' in msg) {
 		if (!msg.auth || !client.ident
