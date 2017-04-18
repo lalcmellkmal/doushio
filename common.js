@@ -37,10 +37,9 @@ DEFINES.MAX_POST_CHARS = 2000;
 DEFINES.WORD_LENGTH_LIMIT = 120;
 
 /// OneeSama.state[0] flags
-DEFINES.S_NORMAL = 0;
 DEFINES.S_BOL = 1;
 DEFINES.S_QUOTE = 2;
-DEFINES.S_SPOIL = 3;
+DEFINES.S_BIG = 4;
 
 function initial_state() {
 	// state[0] = output mode
@@ -282,17 +281,29 @@ OS.break_heart = function (frag) {
 /// 2nd tokenization stage; as we transition our state[0] flag, emits html tags as necessary
 OS.iku = function (token, to) {
 	var state = this.state;
-	if (state[0] == DEFINES.S_QUOTE && to != DEFINES.S_QUOTE)
+	if (state[0] & DEFINES.S_QUOTE && !(to & DEFINES.S_QUOTE))
 		this.callback(safe('</em>'));
+	if (state[0] & DEFINES.S_BIG && !(to & DEFINES.S_BIG)) {
+		if (token && token.safe == '<br>')
+			token = '';
+		this.callback(safe('</h4>'));
+	}
 	switch (to) {
-	case DEFINES.S_QUOTE:
-		if (state[0] != DEFINES.S_QUOTE) {
-			this.callback(safe('<em>'));
-			state[0] = DEFINES.S_QUOTE;
+	case DEFINES.S_BIG:
+		if (!(state[0] & DEFINES.S_BIG)) {
+			this.callback(safe('<h4>'));
+			state[0] |= DEFINES.S_BIG;
 		}
 		this.break_heart(token);
 		break;
-	case DEFINES.S_SPOIL:
+	case DEFINES.S_QUOTE:
+		if (!(state[0] & DEFINES.S_QUOTE)) {
+			this.callback(safe('<em>'));
+			state[0] |= DEFINES.S_QUOTE;
+		}
+		this.break_heart(token);
+		break;
+	case 'SPOIL':
 		if (token[1] == '/') {
 			state[1]--;
 			this.callback(safe('</del>'));
@@ -316,25 +327,44 @@ OS.fragment = function (frag) {
 	var chunks = frag.split(/(\[\/?spoiler\])/i);
 	var state = this.state;
 	for (var i = 0; i < chunks.length; i++) {
-		var chunk = chunks[i], q = (state[0] === DEFINES.S_QUOTE);
+		var chunk = chunks[i];
 		if (i % 2) {
-			var to = DEFINES.S_SPOIL;
+			var to = 'SPOIL';
 			if (chunk[1] == '/' && state[1] < 1)
-				to = q ? DEFINES.S_QUOTE : DEFINES.S_NORMAL;
+				to = state[0] & DEFINES.S_QUOTE;
 			this.iku(chunk, to);
 			continue;
 		}
 		lines = chunk.split(/(\n)/);
 		for (var l = 0; l < lines.length; l++) {
 			var line = lines[l];
+			var is_bol = state[0] === DEFINES.S_BOL;
 			if (l % 2)
 				this.iku(safe('<br>'), DEFINES.S_BOL);
-			else if (state[0] === DEFINES.S_BOL && (line[0]=='>' || line[0]=='\uff1e'))
+			else if (is_bol && !state[1] && /^[#＃]{2}[^#＃]/.test(line))
+				this.iku(line.slice(2), DEFINES.S_BIG);
+			else if (is_bol && /^[>＞]/.test(line))
 				this.iku(line, DEFINES.S_QUOTE);
 			else if (line)
-				this.iku(line, q ? DEFINES.S_QUOTE
-						: DEFINES.S_NORMAL);
+				this.iku(line, state[0] & (DEFINES.S_QUOTE | DEFINES.S_BIG));
 		}
+	}
+};
+
+OS.close_out = function () {
+	if (this.state[0] & DEFINES.S_QUOTE) {
+		this.callback(safe('</em>'));
+		this.state[0] -= DEFINES.S_QUOTE;
+	}
+
+	if (this.state[0] & DEFINES.S_BIG) {
+		this.callback(safe('</h4>'));
+		this.state[0] -= DEFINES.S_BIG;
+	}
+
+	while (this.state[1] > 0) {
+		this.callback(safe('</del>'));
+		this.state[1]--;
 	}
 };
 
@@ -344,11 +374,8 @@ OS.karada = function (body) {
 	this.state = initial_state();
 	this.callback = function (frag) { output.push(frag); }
 	this.fragment(body);
+	this.close_out();
 	this.callback = null;
-	if (this.state[0] == DEFINES.S_QUOTE)
-		output.push(safe('</em>'));
-	for (var i = 0; i < this.state[1]; i++)
-		output.push(safe('</del>'));
 	return output;
 }
 

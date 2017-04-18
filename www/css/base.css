@@ -81,6 +81,12 @@ h3 {
 	display: inline;
 	font-size: inherit;
 }
+h4 {
+	font-size: 200%;
+	font-weight: normal;
+	margin: 0;
+	padding: 0;
+}
 header {
 	background: url('ui/box.png') left 3px no-repeat;
 	margin-left: -14px;
