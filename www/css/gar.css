@@ -81,3 +81,7 @@ hr {
 .omit {
 	color: #555;
 }
+#trans::placeholder {
+	opacity: 0.7;
+	color: #33b;
+}

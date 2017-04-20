@@ -1,5 +1,6 @@
 var saku, postForm;
 var UPLOADING_MSG = 'Uploading...';
+var PLACEHOLDER = '〈ｃｕｒｓｏｒ〉';
 
 connSM.on('synced', postSM.feeder('sync'));
 connSM.on('dropped', postSM.feeder('desync'));
@@ -289,6 +290,7 @@ initialize: function (dest) {
 	this.options.dest.replaceWith(post);
 
 	this.$input.input(this.on_input.bind(this, undefined));
+	this.$input.blur(this.on_blur.bind(this));
 
 	if (op) {
 		this.resize_input();
@@ -410,6 +412,11 @@ on_key_down: function (event) {
 	default:
 		handle_shortcut(event);
 	}
+
+	// don't show default placeholder after pressing enter
+	if (event.which == 13 && this.$input.prop('placeholder') == PLACEHOLDER)
+		this.$input.prop('placeholder', '');
+
 },
 
 on_input: function (val) {
@@ -592,6 +599,31 @@ resize_input: function (val) {
 	$input.css('width', size + 'px');
 },
 
+show_placeholder: function () {
+	var ph = PLACEHOLDER;
+	if (this.char_count * 2 > MAX_POST_CHARS)
+		ph = ' ' + this.char_count + '/' + MAX_POST_CHARS;
+
+	var $input = this.$input;
+	if ($input.prop('placeholder') != ph) {
+		$input.prop('placeholder', ph);
+		// make sure placeholder shows up immediately
+		if (!$input.val()) {
+			$input.val(' ');
+			$input.val('');
+		}
+	}
+},
+
+on_blur: function () {
+	var self = this;
+	// minor delay to avoid flashing when finishing posts
+	setTimeout(function () {
+		if (!self.$input.is(':focus'))
+			self.show_placeholder();
+	}, 100);
+},
+
 dispatch: function (msg) {
 	var a = msg.arg;
 	switch (msg.t) {
@@ -684,6 +716,7 @@ commit: function (text) {
 	if (!text)
 		return;
 	this.char_count += text.length;
+	this.show_placeholder();
 
 	/* Either get an allocation or send the committed text */
 	var attrs = this.model.attributes;
