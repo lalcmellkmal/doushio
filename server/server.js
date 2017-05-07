@@ -714,6 +714,7 @@ var insertSpec = [{
 	email: 'opt string',
 	auth: 'opt string',
 	subject: 'opt string',
+	flavor: 'opt string',
 }];
 
 dispatcher[common.INSERT_POST] = function (msg, client) {

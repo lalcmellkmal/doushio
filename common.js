@@ -839,6 +839,8 @@ OS.mono = function (data) {
 		classes: data.editing ? ['editing'] : [],
 		style: ''
 	};
+	if (data.flavor)
+		info.classes.push(data.flavor);
 	if (data.num == MILLION) {
 		info.classes.push('gravitas');
 		if (data.image)
@@ -846,16 +848,18 @@ OS.mono = function (data) {
 	}
 	this.trigger('openArticle', info);
 	var cls = info.classes.length && info.classes.join(' '),
-	    o = safe('\t<article id="'+data.num+'"' +
-			(cls ? ' class="'+cls+'"' : '') +
-			(info.style ? ' style="'+info.style+'"' : '') +
-			'>'),
+	    o = [safe('\t<article id="'+data.num+'"'),
+		(cls ? [safe(' class="'), cls, safe('"')] : ''),
+		safe(info.style ? ' style="'+info.style+'"' : ''),
+		safe('>')],
 	    c = safe('</article>\n'),
 	    gen = this.monogatari(data, false);
 	return flatten([o, gen.header, gen.image || '', gen.body, c]).join('');
 };
 
 OS.monomono = function (data, cls) {
+	if (data.flavor)
+		cls = cls ? cls+' '+data.flavor : data.flavor;
 	if (data.locked)
 		cls = cls ? cls+' locked' : 'locked';
 	var style;
@@ -864,11 +868,12 @@ OS.monomono = function (data, cls) {
 		if (data.image)
 			style = this.gravitas_style(data.image, true);
 	}
-	var o = safe('<section id="' + data.num +
-		(cls ? '" class="' + cls : '') +
-		(style ? '" style="' + style : '') +
-		'" data-sync="' + (data.hctr || 0) +
-		(data.full ? '' : '" data-imgs="'+data.imgctr) + '">'),
+	var o = [safe('<section id="' + data.num),
+		(cls ? [safe('" class="'), cls] : ''),
+		safe(style ? '" style="' + style : ''),
+		safe('" data-sync="' + (data.hctr || 0)),
+		safe(data.full ? '' : '" data-imgs="'+data.imgctr),
+		safe('">')],
 	    c = safe('</section>\n'),
 	    gen = this.monogatari(data, true);
 	return flatten([o, gen.image || '', gen.header, gen.body, '\n', c]);

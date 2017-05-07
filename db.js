@@ -519,7 +519,7 @@ Y.reserve_post = function (op, ip, callback) {
 	}
 };
 
-var optPostFields = 'name trip email auth subject'.split(' ');
+var optPostFields = 'name trip email auth subject flavor'.split(' ');
 
 Y.insert_post = function (msg, body, extra, callback) {
 	if (config.READ_ONLY)
