@@ -806,6 +806,10 @@ function allocate_post(msg, client, callback) {
 		if (common.is_noko(post.email))
 			delete post.email;
 	}
+	if (msg.flavor && /^\w+$/.test(msg.flavor)) {
+		if (msg.flavor == 'floop')
+			post.flavor = 'floop';
+	}
 	post.state = common.initial_state();
 
 	if ('auth' in msg) {

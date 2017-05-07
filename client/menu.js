@@ -19,8 +19,13 @@ $DOC.on('click', '.control', function (event) {
 		var opts = menuOptions.slice();
 
 		var model = parent_model($target);
-		if (!model)
-			opts = ['Focus']; /* Just a draft, can't do much */
+		if (!model) {
+			var op = postForm && postForm.model.get('op');
+			if (postForm && !postForm.committed() && (!op || $('#'+op).is('.floop')))
+				opts = ['Flip'];
+			else
+				opts = ['Focus'];
+		}
 
 		oneeSama.trigger('menuOptions', {options: opts, model: model});
 

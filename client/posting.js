@@ -231,10 +231,11 @@ initialize: function (dest) {
 
 	this.listenTo(this.model, 'change', this.render_buttons);
 	this.listenTo(this.model, 'change:spoiler', this.render_spoiler_pane);
+	this.listenTo(this.model, 'change:floop', this.render_floop);
 
 	var attrs = this.model.attributes;
 	var op = attrs.op;
-	var post = op ? $('<article/>') : this.options.thread;
+	var post = op ? $('<article class="mine"/>') : this.options.thread;
 	this.setElement(post[0]);
 
 	this.buffer = $('<p/>');
@@ -694,6 +695,8 @@ make_alloc_request: function (text, image) {
 	opt('frag', text);
 	opt('image', image);
 	opt('op', this.model.get('op'));
+	if (this.model.get('floop'))
+		msg.flavor = 'floop';
 	return msg;
 },
 
@@ -788,6 +791,7 @@ finish: function () {
 		this.preserve = true;
 	}
 	postSM.feed('done');
+	this.$el.removeClass('mine');
 },
 
 remove: function () {
@@ -925,7 +929,16 @@ render_spoiler_pane: function (model, sp) {
 	this.$toggle.css('background-image', 'url("' + img + '")');
 },
 
+render_floop: function (model, floop) {
+	this.$el.toggleClass('floop', floop);
+},
+
 });
+
+menuHandlers.Flip = function (model) {
+	if (postForm && !postForm.committed())
+		postForm.model.set('floop', !postForm.model.get('floop'));
+};
 
 function image_upload_url() {
 	var url = imagerConfig.UPLOAD_URL || '../upload/';
