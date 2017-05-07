@@ -136,11 +136,11 @@ function MD5_file(path, callback) {
 	});
 }
 
-if (require.main === module) {
+if (require.main === module) process.nextTick(function () {
 	var recycler = new Recycler;
 	recycler.recycle_archive(function (err) {
 		if (err) throw err;
 		recycler.y.disconnect();
 		process.exit(0);
 	});
-}
+});
