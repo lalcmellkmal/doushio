@@ -371,7 +371,7 @@ on_image_alloc: function (msg) {
 	var attrs = this.model.attributes;
 	if (attrs.cancelled)
 		return;
-	if (!attrs.num && !attrs.sentAllocRequest) {
+	if (!this.committed()) {
 		send([INSERT_POST, this.make_alloc_request(null, msg)]);
 		this.model.set({sentAllocRequest: true});
 	}
@@ -720,7 +720,7 @@ commit: function (text) {
 
 	/* Either get an allocation or send the committed text */
 	var attrs = this.model.attributes;
-	if (!attrs.num && !attrs.sentAllocRequest) {
+	if (!this.committed()) {
 		send([INSERT_POST, this.make_alloc_request(text, null)]);
 		this.model.set({sentAllocRequest: true});
 	}
@@ -741,6 +741,11 @@ commit: function (text) {
 		line_buffer.append(document.createTextNode(text));
 		line_buffer[0].normalize();
 	}
+},
+
+committed: function () {
+	var a = this.model.attributes;
+	return !!(a.num || a.sentAllocRequest);
 },
 
 flush_pending: function () {
