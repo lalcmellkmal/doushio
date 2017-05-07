@@ -121,6 +121,10 @@ function handle_shortcut(event) {
 			}
 		}
 		break;
+	case shortcutKeys.flip:
+		menuHandlers.Flip();
+		used = true;
+		break;
 	}
 
 	if (used) {

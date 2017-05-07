@@ -463,6 +463,7 @@ var shortcuts = [
 	{label: 'New post', name: 'new', which: 78},
 	{label: 'Image spoiler', name: 'togglespoiler', which: 73},
 	{label: 'Finish post', name: 'done', which: 83},
+	{label: 'Flip side', name: 'flip', which: 70},
 ];
 
 function toggle_shortcuts(event) {
