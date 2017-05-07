@@ -15,12 +15,16 @@ $META	<!--[if lt IE 9]><script src="{{MEDIA_URL}}js/ie.js"></script><![endif]-->
 
 	-->
 	<style>
+	section.full.floop article { float: left; clear: both; }
 	section.full.floop article.floop { float: right; clear: right; }
-	section.full.floop article.mine.floop { margin-bottom: 1em; }
+	section.full.floop article.mine { margin-bottom: 1em; }
 	section.full.floop article.mine,
 	section.full.floop aside { clear: both; }
 	section.floop > header > nav:after,
 	section.floop > header > a.nope:after { content: " [Dual]"; font-weight: bold; }
+	@media screen and (min-width: 900px) {
+		section.full.floop article.floop { max-width: 50%; min-width: 40%; }
+	}
 	</style>
 </head>
 <a id="feedback" href="mailto:{{EMAIL}}" target="_blank">Feedback</a>

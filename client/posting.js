@@ -304,6 +304,7 @@ initialize: function (dest) {
 	$('aside').remove();
 
 	preload_panes();
+	this.model.set('floop', window.lastFloop);
 },
 
 propagate_ident: function () {
@@ -935,9 +936,19 @@ render_floop: function (model, floop) {
 
 });
 
-menuHandlers.Flip = function (model) {
+menuHandlers.Flip = function () {
+	var floop = !window.lastFloop;
+	window.lastFloop = floop;
+	if (floop)
+		$('<style/>', {
+			id: 'floop-aside-right',
+			text: 'section.full.floop aside { margin: -26px 0 2px auto; }',
+		}).appendTo('head');
+	else
+		$('#floop-aside-right').remove();
+
 	if (postForm && !postForm.committed())
-		postForm.model.set('floop', !postForm.model.get('floop'));
+		postForm.model.set('floop', floop);
 };
 
 function image_upload_url() {
