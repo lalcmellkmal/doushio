@@ -966,6 +966,16 @@ menuHandlers.Vapor = function () {
 };
 
 oneeSama.hook('menuOptions', function (info) {
+	if (!info.model && info.mine && !postForm.committed()) {
+		var $sec = info.$button.closest('section.floop');
+		if ($sec.length || !THREAD) {
+			var i = info.options.indexOf('Focus');
+			if (i >= 0)
+				info.options.splice(i, 1);
+			info.options.unshift('Flip');
+		}
+	}
+
 	if (info.mine) {
 		var active = vapor < 0 || wombo < 0;
 		info.options.push(active ? 'Eject' : 'Vapor');

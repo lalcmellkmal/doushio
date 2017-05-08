@@ -20,18 +20,19 @@ $DOC.on('click', '.control', function (event) {
 		var mine, opts;
 		if (!model) {
 			mine = !!postForm;
-			var op = mine && postForm.model.get('op');
-			if (mine && !postForm.committed() && (!op || $('#'+op).is('.floop')))
-				opts = ['Flip'];
-			else
-				opts = ['Focus'];
+			opts = ['Focus'];
 		}
 		else {
 			mine = postForm && postForm.model.id == model.id;
 			opts = menuOptions.slice();
 		}
 
-		oneeSama.trigger('menuOptions', {options: opts, model: model, mine: mine});
+		oneeSama.trigger('menuOptions', {
+			options: opts, // alter this in-place
+			model: model,
+			mine: mine,
+			$button: $target,
+		});
 
 		opts.forEach(function (opt) {
 			$('<li/>').text(opt).appendTo($menu);
