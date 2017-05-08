@@ -63,14 +63,20 @@ $DOC.on('keydown', handle_shortcut);
 
 var vapor = 0, wombo = 0, eject = 0;
 
+menuHandlers.Eject = function () {
+	vapor = wombo = eject = 0;
+	ComposerView.prototype.word_filter = function (w) { return w; };
+	flash_bg('white');
+};
+
 function handle_shortcut(event) {
 	var k = event.which;
 	if (vapor < 0 || wombo < 0) {
 		if (event.shiftKey && k == [69,74,69,67,84,49][eject]) {
 			if (++eject >= 6) {
-				vapor = wombo = eject = 0;
-				ComposerView.prototype.word_filter = function (w) { return w; };
-				flash_bg('white');
+				menuHandlers.Eject();
+				event.stopImmediatePropagation();
+				event.preventDefault();
 			}
 		}
 		else
@@ -78,10 +84,7 @@ function handle_shortcut(event) {
 	}
 	else if (event.shiftKey && k > 85 && k < 88) {
 		if (k == 86 && ++vapor > 10) {
-			vapor = -1;
-			if (postForm)
-				postForm.$input.val('');
-			flash_bg('#f98aa5');
+			menuHandlers.Vapor();
 			event.stopImmediatePropagation();
 			event.preventDefault();
 		}
@@ -954,6 +957,21 @@ menuHandlers.Flip = function () {
 	if (postForm && !postForm.committed())
 		postForm.model.set('floop', floop);
 };
+
+menuHandlers.Vapor = function () {
+	vapor = -1;
+	flash_bg('#f98aa5');
+	if (postForm && /^\s*V+$/.test(postForm.$input.val()))
+		postForm.$input.val('');
+};
+
+oneeSama.hook('menuOptions', function (info) {
+	if (info.mine) {
+		var active = vapor < 0 || wombo < 0;
+		info.options.push(active ? 'Eject' : 'Vapor');
+	}
+});
+
 
 function image_upload_url() {
 	var url = imagerConfig.UPLOAD_URL || '../upload/';

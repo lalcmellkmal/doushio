@@ -16,18 +16,22 @@ $DOC.on('click', '.control', function (event) {
 		$menu.remove();
 	else {
 		$menu = $('<ul/>', {"class": 'popup-menu'});
-		var opts = menuOptions.slice();
-
 		var model = parent_model($target);
+		var mine, opts;
 		if (!model) {
-			var op = postForm && postForm.model.get('op');
-			if (postForm && !postForm.committed() && (!op || $('#'+op).is('.floop')))
+			mine = !!postForm;
+			var op = mine && postForm.model.get('op');
+			if (mine && !postForm.committed() && (!op || $('#'+op).is('.floop')))
 				opts = ['Flip'];
 			else
 				opts = ['Focus'];
 		}
+		else {
+			mine = postForm && postForm.model.id == model.id;
+			opts = menuOptions.slice();
+		}
 
-		oneeSama.trigger('menuOptions', {options: opts, model: model});
+		oneeSama.trigger('menuOptions', {options: opts, model: model, mine: mine});
 
 		opts.forEach(function (opt) {
 			$('<li/>').text(opt).appendTo($menu);
