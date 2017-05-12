@@ -1,6 +1,6 @@
 var saku, postForm;
 var UPLOADING_MSG = 'Uploading...';
-var PLACEHOLDER = '〈ｃｕｒｓｏｒ〉';
+var PLACEHOLDER = '〉〉〉';
 
 connSM.on('synced', postSM.feeder('sync'));
 connSM.on('dropped', postSM.feeder('desync'));
@@ -421,11 +421,6 @@ on_key_down: function (event) {
 	default:
 		handle_shortcut(event);
 	}
-
-	// don't show default placeholder after pressing enter
-	if (event.which == 13 && this.$input.prop('placeholder') == PLACEHOLDER)
-		this.$input.prop('placeholder', '');
-
 },
 
 on_input: function (val) {
@@ -513,6 +508,8 @@ on_input: function (val) {
 	}
 	if (changed)
 		$input.val(val);
+	if (this.$input.prop('placeholder'))
+		this.$input.prop('placeholder', '');
 
 	var len = val.length, lim = 0;
 	var nl = val.lastIndexOf('\n');
@@ -630,7 +627,7 @@ on_blur: function () {
 	setTimeout(function () {
 		if (!self.$input.is(':focus'))
 			self.show_placeholder();
-	}, 100);
+	}, 500);
 },
 
 dispatch: function (msg) {
@@ -727,7 +724,6 @@ commit: function (text) {
 	if (!text)
 		return;
 	this.char_count += text.length;
-	this.show_placeholder();
 
 	/* Either get an allocation or send the committed text */
 	var attrs = this.model.attributes;
