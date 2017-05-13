@@ -51,7 +51,7 @@ options = new Backbone.Model(options);
 
 nashi.upload = !!$('<input type="file"/>').prop('disabled');
 
-if (window.screen && screen.width <= 320) {
+if (window.screen && screen.width <= 480) {
 	inputMinSize = 50;
 	fullWidthExpansion = true;
 }
@@ -403,8 +403,23 @@ function fit_to_window($img, w, h, widthFlag, heightFlag) {
 				expand_full_width($img, $post, rect);
 				heightFlag = false;
 			}
-			else
+			else {
 				overX = rect.right - innerWidth;
+
+				// right-side posts might fall off the left side of the page
+				// account for them + left margin
+				if (rect.left < 0) {
+					// there has to be a better way...
+					function m($el) {
+						var m = parseInt($el.css('marginLeft'), 10);
+						var p = parseInt($el.css('paddingLeft'), 10);
+						return (m || 0) + (p || 0);
+					}
+					var $sec = $post.closest('section');
+					var margin = m($('body')) + m($post) + m($sec) + 13;
+					overX -= rect.left - margin;
+				}
+			}
 		}
 		else if ($post.is('section'))
 			overX = w - (innerWidth - rect.left*2);
@@ -433,6 +448,10 @@ function fit_to_window($img, w, h, widthFlag, heightFlag) {
 }
 
 function expand_full_width($img, $post, rect) {
+	if ($post.hasClass('floop')) {
+		$post.removeClass('floop');
+		$post.data('crouching-floop', true);
+	}
 	var img = $img[0].getBoundingClientRect();
 	$img.css('margin-left', -img.left + 'px');
 	var over = rect.right - img.right;
@@ -452,6 +471,10 @@ function contract_full_width($post) {
 			'padding-right': '',
 			'border-right': '',
 		});
+	}
+	if ($post.data('crouching-floop')) {
+		$post.addClass('floop');
+		$post.removeData('crouching-floop');
 	}
 }
 
