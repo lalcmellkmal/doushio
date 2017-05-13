@@ -365,7 +365,8 @@ function expand_image($img) {
 	// if this is a high-density screen, reduce image size appropriately
 	var r = window.devicePixelRatio;
 	if (!options.get('nohighres') && !video && r && r > 1) {
-		if (w/r > tw && h/r > th) {
+		var min = 1000;
+		if ((w > min || h > min) && w/r > tw && h/r > th) {
 			w /= r;
 			h /= r;
 		}
