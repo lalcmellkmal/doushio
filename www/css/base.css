@@ -396,6 +396,18 @@ pre, .themed {
 	}
 }
 
+section.full.floop article { float: left; clear: both; }
+section.full.floop article.floop { float: right; clear: right; }
+section.full.floop article.mine { margin-bottom: 1em; }
+section.full.floop article.mine,
+section.full.floop aside { clear: both; }
+section.floop > header > nav:after,
+section.floop > header > a.nope:after { content: " [Dual]"; font-weight: bold; }
+@media screen and (min-width: 900px) {
+	section.full.floop article.floop { max-width: 50%; min-width: 40%; }
+	section.full.floop article.floop.expanded { max-width: inherit; min-width: inherit; }
+}
+
 blockquote.twitter-tweet {
 	display: inline-block;
 	padding: 20px;
