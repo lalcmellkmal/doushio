@@ -371,7 +371,7 @@ pre, .themed {
 	section {
 		margin: 0;
 	}
-	.expanded img {
+	.expanded figure img {
 		margin-right: 0;
 	}
 	.scroll-lock {
