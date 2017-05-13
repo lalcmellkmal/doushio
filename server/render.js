@@ -146,8 +146,7 @@ exports.write_thread_head = function (out, board, op, opts) {
 	out.write(indexTmpl[i++]);
 	out.write('Thread #' + op);
 	out.write(indexTmpl[i++]);
-	var buttons = common.action_link_html('#bottom', 'Bottom') + ' ' +
-			common.action_link_html('#persona', 'Persona', 'persona');
+	var buttons = bottomHTML + ' ' + personaHTML;
 	out.write(buttons + '\n<hr>\n');
 };
 
@@ -187,13 +186,15 @@ exports.make_pagination_html = function (info) {
 			bits.push('<strong>' + i + '</strong>');
 	}
 	if (info.next_page)
-		bits.push(' <input type="button" value="Next">');
-	bits.push('</nav>');
+		bits.push(' <input type="button" value="Next"> ');
+	bits.push('<a id="persona" href="#persona">ID</a></nav>');
 	return bits.join('');
 };
 
 var returnHTML = common.action_link_html('.', 'Return').replace(
 		'span', 'span id="bottom"');
+var bottomHTML = common.action_link_html('#bottom', 'Bottom');
+var personaHTML = common.action_link_html('#persona', 'Identity', 'persona');
 
 exports.write_page_end = function (out, ident, returnLink) {
 	if (returnLink)
