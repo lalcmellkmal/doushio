@@ -36,6 +36,7 @@ optSpecs.push(option_inline_expansion);
 if (window.devicePixelRatio > 1)
 	optSpecs.push(option_high_res);
 optSpecs.push(option_thumbs);
+optSpecs.push(option_autocomplete);
 optSpecs.push(option_backlinks);
 optSpecs.push(option_reply_at_right);
 optSpecs.push(option_theme);
@@ -207,6 +208,16 @@ function option_reply_at_right(r) {
 option_reply_at_right.id = 'replyright';
 option_reply_at_right.label = '[Reply] at right';
 option_reply_at_right.type = 'checkbox';
+
+/* AUTOCOMPLETE */
+
+function option_autocomplete(b) {
+	if (postForm)
+		postForm.model.set('autocomplete', b);
+}
+option_autocomplete.id = 'noautocomplete';
+option_autocomplete.label = 'Auto-complete';
+option_autocomplete.type = 'revcheckbox';
 
 /* BACKLINKS */
 

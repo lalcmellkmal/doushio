@@ -827,6 +827,9 @@ render_buttons: function () {
 		self.$cancel.toggle(!!(!attrs.num || attrs.uploading));
 		self.$imageInput.prop('disabled', !!attrs.uploading);
 		self.$uploadStatus.text(attrs.uploadStatus);
+		var auto = options.get('noautocomplete') ? 'off' : 'on';
+		self.$input.attr({autocapitalize: auto, autocomplete: auto,
+			autocorrect: auto, spellcheck: auto == 'on'});
 	});
 },
 
