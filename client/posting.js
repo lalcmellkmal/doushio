@@ -522,7 +522,10 @@ on_input: function (val) {
 			this.commit(ok + '\n');
 	}
 	else if (vapor < 0 && !ward_len) {
-		if (len > 3)
+		// try to not break apart ##bigtext marker
+		if (len < 6 && /^＃＃/.test(val))
+			lim = 0;
+		else if (len > 3)
 			lim = len - 3;
 	}
 	else {
