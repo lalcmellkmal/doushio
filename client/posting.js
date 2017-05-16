@@ -527,6 +527,20 @@ on_input: function (val) {
 			lim = 0;
 		else if (len > 3)
 			lim = len - 3;
+
+		if (lim > 0) {
+			// don't break surrogate pairs apart
+			// (javascript uses UCS-2... how terrible)
+			var u = val.charCodeAt(lim - 1);
+			if (0xd800 <= u && u < 0xdc00)
+				lim--;
+
+			// don't cut off variation selectors
+			// (hack; we need a grapheme library...)
+			u = val.charCodeAt(lim);
+			if (0xfe00 <= u && u < 0xfe10)
+				lim--;
+		}
 	}
 	else {
 		var rev = val.split('').reverse().join('');
