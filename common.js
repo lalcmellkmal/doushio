@@ -494,10 +494,7 @@ OS.geimu = function (text) {
 /// 5th tokenization stage; parses ^s
 OS.kinpira = function (text) {
 	if (!/[＾^]/.test(text) || /^([＾^]_|:[＾^])/.test(text)) {
-		if (LINKIFY)
-			this.linkify(text);
-		else
-			this.callback(text);
+		this.itameshi(text);
 		return;
 	}
 	var bits = text.split(/[＾^]/);
@@ -509,10 +506,10 @@ OS.kinpira = function (text) {
 	this.sup_level = 0;
 	for (var i = 0; i < bits.length; i++) {
 		if (bits[i])
-			this.callback(bits[i]);
+			this.itameshi(bits[i]);
 		if (i + 1 < bits.length && i < 5) {
 			// if there's more text, open a <sup>
-			this.callback(soup);
+			this.itameshi(soup);
 			this.sup_level++;
 		}
 	}
@@ -521,14 +518,33 @@ OS.kinpira = function (text) {
 	this.sup_level = 0;
 	soup = safe('</sup>');
 	for (var i = 0; i < n; i++)
-		this.callback(soup);
+		this.itameshi(soup);
+};
+
+/// 6th tokenization stage; parses individual *italic* *words*
+OS.itameshi = function (text) {
+	while (true) {
+		var m = /(^| )\*([^ *]+)\*($| )/.exec(text);
+		if (!m)
+			break;
+		if (m.index > 0) {
+			var before = text.slice(0, m.index);
+			LINKIFY ? this.linkify(before) : this.callback(before);
+		}
+		if (m[1])
+			this.callback(m[1]);
+		this.callback(safe('<i>' + escape_html(m[2]) + '</i>'));
+		text = text.slice(m.index + m[0].length - m[3].length);
+	}
+	if (text)
+		LINKIFY ? this.linkify(text) : this.callback(text);
 };
 
 // Convert text URLs to clickable links
 // *Not* recommended. Use at your own risk.
 var LINKIFY = false;
 
-/// optional 6th tokenization stage
+/// optional 7th tokenization stage
 if (LINKIFY) { OS.linkify = function (text) {
 
 	var bits = text.split(/(https?:\/\/[^\s"<>^]*[^\s"<>'.,!?:;^])/);
