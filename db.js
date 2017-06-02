@@ -577,7 +577,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 	if (msg.links)
 		m.hmset(key + ':links', msg.links);
 
-	var etc = {augments: {}, cacheUpdate: {}};
+	var etc = {cacheUpdate: {}};
 	var priv = this.ident.priv;
 	if (op) {
 		etc.cacheUpdate.num = num;
@@ -625,7 +625,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 			var n = post_volume(view, body);
 			if (n > 0)
 				update_throughput(m, ip, view.time, n);
-			etc.augments.auth = {ip: ip};
+			etc.ip = ip;
 		}
 
 		self._log(m, op, common.INSERT_POST, [num, view], etc);
@@ -1231,8 +1231,10 @@ Y._log = function (m, op, kind, msg, opts) {
 	var len = opBit.length + msg.length;
 	msg = len + '|' + opBit + msg;
 
-	if (!_.isEmpty(opts.augments))
-		msg += JSON.stringify(opts.augments);
+	// we can add an extra trailing message for secret info
+	if (opts.ip)
+		msg += JSON.stringify({auth: {ip: opts.ip}});
+
 	m.publish(key, msg);
 	var tags = opts.tags || (this.tag ? [this.tag] : []);
 	tags.forEach(function (tag) {
