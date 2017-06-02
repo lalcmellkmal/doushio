@@ -580,6 +580,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 	var etc = {cacheUpdate: {}};
 	var priv = this.ident.priv;
 	if (op) {
+		etc.ipNum = num;
 		etc.cacheUpdate.num = num;
 		var pre = 'thread:' + op;
 		if (priv) {
@@ -787,6 +788,7 @@ Y.remove_thread = function (op, callback) {
 		/* Next two vals are checked */
 		m.renamenx(key, dead_key);
 		m.renamenx(key + ':history', dead_key + ':history');
+		m.renamenx(key + ':ips', dead_key + ':ips');
 		m.exec(next);
 	},
 	function (results, done) {
@@ -878,6 +880,7 @@ Y.archive_thread = function (op, callback) {
 		// (a bit silly right after adding a new entry)
 		m.hdel(key, 'hctr');
 		m.del(key + ':history');
+		m.del(key + ':ips');
 
 		// delete hidden posts
 		dels.forEach(function (num) {
@@ -1226,6 +1229,8 @@ Y._log = function (m, op, kind, msg, opts) {
 		m.rpush(key + ':history', msg);
 		m.hincrby(key, 'hctr', 1);
 	}
+	if (opts.ipNum)
+		m.hset(key + ':ips', opts.ipNum, opts.ip);
 
 	var opBit = op + ',';
 	var len = opBit.length + msg.length;
@@ -1251,17 +1256,36 @@ Y._log = function (m, op, kind, msg, opts) {
 Y.fetch_backlogs = function (watching, callback) {
 	var r = this.connect();
 	var combined = [];
+	var inject_ips = caps.can_moderate(this.ident);
 	forEachInObject(watching, function (thread, cb) {
 		if (thread == 'live')
 			return cb(null);
-		var key = 'thread:' + thread + ':history';
+		var key = 'thread:' + thread;
 		var sync = watching[thread];
-		r.lrange(key, sync, -1, function (err, log) {
+		var m = r.multi();
+		m.lrange(key + ':history', sync, -1);
+		if (inject_ips) {
+			// would be nice to fetch only the relevant ips...?
+			m.hgetall(key + ':ips');
+		}
+		m.exec(function (err, rs) {
 			if (err)
 				return cb(err);
 
 			var prefix = thread + ',';
-			log.forEach(function (entry) {
+			var ips = inject_ips && rs[1];
+
+			// construct full messages from history entries
+			rs[0].forEach(function (entry) {
+
+				// attempt to inject ip to INSERT_POST log
+				var m = ips && entry.match(/^2,(\d+),{(.+)$/);
+				var ip = m && ips[m[1]];
+				if (ip) {
+					var inject = '"ip":' + JSON.stringify(ip) + ',';
+					entry = '2,' + m[1] + ',{' + inject + m[2];
+				}
+
 				combined.push(prefix + entry);
 			});
 
