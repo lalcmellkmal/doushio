@@ -146,13 +146,16 @@ S.on_message = function (chan, msg) {
 	var op = parse_number(m[1]);
 	var kind = parse_number(m[2]);
 
-	if (extra) {
-		var modified = inject_extra(op, kind, msg, extra);
-		// currently this won't modify op or kind,
-		// but will have to watch out for that if that changes
-		if (modified)
-			msg = modified;
+	if (extra && kind == common.INSERT_POST) {
+		// add ip to INSERT_POST
+		var m = msg.match(/^(\d+,2,\d+,{)(.+)$/);
+		if (m && extra.ip) {
+			if (/"ip":/.test(msg))
+				throw "`ip` in public pub " + chan;
+			msg = m[1] + '"ip":' + JSON.stringify(extra.ip) + ',' + m[2];
+		}
 	}
+
 	this.emit('update', op, kind, '[[' + msg + ']]');
 };
 
@@ -195,16 +198,6 @@ S.has_no_listeners = function () {
 			self.commit_sudoku();
 	}, 30 * 1000);
 };
-
-function inject_extra(op, kind, msg, extra) {
-	// Just one kind of insertion right now
-	if (kind == common.INSERT_POST && extra.ip) {
-		var m = msg.match(/^(\d+,\d+,\d+,)(.+)$/);
-		var post = JSON.parse(m[2]);
-		post.ip = extra.ip;
-		return m[1] + JSON.stringify(post);
-	}
-}
 
 /* OP CACHE */
 
