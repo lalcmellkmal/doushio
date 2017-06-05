@@ -2,6 +2,7 @@ module.exports = {
 	MAIL_FROM: "Reports <reports@doushio.com>",
 	MAIL_TO: ['lalc@doushio.com'],
 	MAIL_THREAD_URL_BASE: 'http://your.board.index/',
+	MAIL_MEDIA_URL: 'http://your.board.index/media/',
 
 	SMTP: {
 		service: 'Gmail',

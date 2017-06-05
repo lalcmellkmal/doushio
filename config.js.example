@@ -13,13 +13,16 @@ var config = {
 	REDIS_PORT: 6379,
 	READ_ONLY: false,
 
-	BOARDS: ['moe', 'gar', 'meta', 'archive', 'staff'],
+	BOARDS: ['moe', 'gar', 'tea', 'meta', 'archive', 'staff'],
 	DEFAULT_BOARD: 'moe',
 	GAME_BOARDS: ['moe', 'archive'],
 	STAFF_BOARD: 'staff',
 	THREADS_PER_PAGE: 10,
 	ABBREVIATED_REPLIES: 5,
 	THREAD_LAST_N: 100,
+
+	CURFEW_BOARDS: ['tea'],
+	CURFEW_HOURS: [22, 23],
 
 	THREAD_THROTTLE: 60,
 	THREAD_EXPIRY: 3600 * 24 * 7,
