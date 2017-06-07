@@ -7,9 +7,10 @@
 		'sources': ['tripcode.cc'],
 		'link_settings': {
 			'conditions': [
-				['OS=="linux"', {'libraries': ['-lcrypt', '-liconv']}],
+				['OS=="linux"', {'libraries': ['-lcrypt']}],
 				['OS=="freebsd"', {'libraries': ['-lcrypt', '-liconv']}],
-				['OS=="mac"', {'libraries': ['-lcrypto', '-liconv']}]
+				['OS=="mac"', {'libraries': ['-lcrypto', '-liconv'],
+				               'library_dirs': ['/usr/local/opt/openssl/lib']}]
 			]
 		}
 	}]

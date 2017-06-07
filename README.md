@@ -10,6 +10,7 @@ Setup:
 * Copy hot.js.example to hot.js and configure
 * Copy imager/config.js.example to imager/config.js and configure
 * Copy report/config.js.example to report/config.js and configure
+* You might need to run `npm install -g node-gyp`
 * Run `npm install` to install npm deps and compile a few helpers
 * Run `node builder.js` to run an auto-reloading development server
 
