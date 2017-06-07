@@ -173,6 +173,8 @@ IU.process = function () {
 	image.ext = path.extname(filename).toLowerCase();
 	if (image.ext == '.jpeg')
 		image.ext = '.jpg';
+	if (image.ext == '.mov')
+		image.ext = '.mp4';
 	if (IMAGE_EXTS.indexOf(image.ext) < 0
 			&& (!config.VIDEO || config.VIDEO_EXTS.indexOf(image.ext) < 0))
 		return this.failure(Muggle('Invalid image format.'));
