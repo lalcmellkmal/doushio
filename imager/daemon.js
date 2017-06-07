@@ -38,11 +38,11 @@ function get_thumb_specs(image, pinky, scale) {
 		specs.quality = config.PNG_THUMB_QUALITY;
 	}
 	else if (pinky) {
-		specs.bg = '#d6daf0';
+		specs.bg = '#ffffff';
 		specs.quality = config.PINKY_QUALITY;
 	}
 	else {
-		specs.bg = '#eef2ff';
+		specs.bg = '#ffffff';
 		specs.quality = config.THUMB_QUALITY;
 	}
 	return specs;
