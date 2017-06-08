@@ -10,7 +10,8 @@ article, aside, .pagination {
 	border-bottom: 1px solid #d1c29b;
 }
 article.highlight {
-	background-color: #ffb8d5;
+	background: #ffb8d5 url('sakura.png');
+	background-size: 100px 73px;
 	border-color: #ef93c5;
 }
 article.editing {

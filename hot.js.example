@@ -21,7 +21,7 @@ this.hot = {
 	/* Bump this version whenever you change base.css */
 	BASE_CSS_VERSION: 47,
 	/* Bump this version whenever you modify any existing theme CSS */
-	THEME_CSS_VERSION: 10,
+	THEME_CSS_VERSION: 11,
 
 	INTER_BOARD_NAVIGATION: true,
 
