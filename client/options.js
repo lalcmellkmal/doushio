@@ -215,9 +215,9 @@ function option_autocomplete(b) {
 	if (postForm)
 		postForm.model.set('autocomplete', b);
 }
-option_autocomplete.id = 'noautocomplete';
+option_autocomplete.id = 'autocomplete';
 option_autocomplete.label = 'Auto-complete';
-option_autocomplete.type = 'revcheckbox';
+option_autocomplete.type = 'checkbox';
 
 /* BACKLINKS */
 
