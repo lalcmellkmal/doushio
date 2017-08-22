@@ -243,6 +243,11 @@ if (config.DEBUG) {
 else {
 	/* Production login endpoint */
 	web.route_get(/^\/login$/, auth.login);
+
+	if (config.SERVE_STATIC_FILES)
+		winston.warn("Recommended: nginx-like webserver instead of SERVE_STATIC_FILES.");
+	if (config.SERVE_IMAGES)
+		winston.warn("Recommended: nginx-like webserver instead of SERVE_IMAGES.");
 }
 web.route_get(/^\/logout$/, auth.logout);
 web.route_post(/^\/logout$/, auth.logout);

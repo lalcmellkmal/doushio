@@ -17,11 +17,14 @@ Setup:
 Production:
 
 * Have your webserver serve www/ (or wherever you've moved src, thumb, etc.)
+  - Configure `imager.config.MEDIA_URL` appropriately
+  - Then turn off `SERVE_STATIC_FILES` and `SERVE_IMAGES`
+* If you're behind a reverse proxy (CF, etc) turn on `TRUST_X_FORWARDED_FOR`
 * Run `node server/server.js` for just the server
-* config.DAEMON support is broken for now
 * You can update client code & hot.js on-the-fly with `node server/kill.js`
 * For nginx hosting/reverse proxying, refer to docs/nginx.conf.example
 * For a sample init script, refer to docs/doushio.initscript.example
+* config.DAEMON support is old and broken, PRs welcome
 
 Dependencies:
 

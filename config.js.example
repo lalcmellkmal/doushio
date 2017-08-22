@@ -5,8 +5,8 @@ var config = {
 	SECURE_SALT: "LALALALALALALALA", /* [A-Za-z0-9./]{16} */
 	SOCKET_PATH: '/hana',
 	TRUST_X_FORWARDED_FOR: false,
-	SERVE_STATIC_FILES: false,
-	SERVE_IMAGES: false,
+	SERVE_STATIC_FILES: true,
+	SERVE_IMAGES: true,
 	GZIP: false, /* not preferred; use nginx (or other)'s gzipping */
 	USE_WEBSOCKETS: true,
 
