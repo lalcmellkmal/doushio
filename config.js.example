@@ -4,7 +4,6 @@ var config = {
 	DEBUG: true,
 	SECURE_SALT: "LALALALALALALALA", /* [A-Za-z0-9./]{16} */
 	SOCKET_PATH: '/hana',
-	TRUST_X_FORWARDED_FOR: false,
 	SERVE_STATIC_FILES: true,
 	SERVE_IMAGES: true,
 	GZIP: false, /* not preferred; use nginx (or other)'s gzipping */
@@ -12,6 +11,10 @@ var config = {
 
 	REDIS_PORT: 6379,
 	READ_ONLY: false,
+
+	TRUST_X_FORWARDED_FOR: false,
+	CLOUDFLARE: false,
+	RESTRICTED_COUNTRIES: ['T1'], /* cloudflare only; T1 = Tor */
 
 	BOARDS: ['moe', 'gar', 'tea', 'meta', 'archive', 'staff'],
 	DEFAULT_BOARD: 'moe',

@@ -1104,14 +1104,19 @@ function start_server() {
 
 	sockJs.on('connection', function (socket) {
 		var ip = socket.remoteAddress;
+		var country;
 		if (config.TRUST_X_FORWARDED_FOR) {
 			var ff = web.parse_forwarded_for(
 					socket.headers['x-forwarded-for']);
 			if (ff)
 				ip = ff;
 		}
-
-		var client = new okyaku.Okyaku(socket, ip);
+		if (!ip) {
+			winston.warn('no ip from ' + socket);
+			socket.close();
+			return;
+		}
+		var client = new okyaku.Okyaku(socket, ip, country);
 		socket.on('data', client.on_message.bind(client));
 		socket.on('close', client.on_close.bind(client));
 	});

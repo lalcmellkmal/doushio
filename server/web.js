@@ -19,15 +19,20 @@ var resources = [];
 
 var server = require('http').createServer(function (req, resp) {
 	var ip = req.connection.remoteAddress;
+	var country;
 	if (config.TRUST_X_FORWARDED_FOR)
 		ip = parse_forwarded_for(req.headers['x-forwarded-for']) || ip;
+	if (config.CLOUDFLARE) {
+		ip = req.headers['cf-connecting-ip'] || ip;
+		country = req.headers['cf-ipcountry'];
+	}
 	if (!ip) {
 		resp.writeHead(500, {'Content-Type': 'text/plain'});
 		resp.end("Your IP could not be determined. "
 				+ "This server is misconfigured.");
 		return;
 	}
-	req.ident = caps.lookup_ident(ip);
+	req.ident = caps.lookup_ident(ip, country);
 	if (req.ident.timeout)
 		return timeout(resp);
 	if (req.ident.ban)

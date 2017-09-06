@@ -183,6 +183,11 @@ function parse_suspensions(suspensions) {
 
 exports.lookup_ident = function (ip, country) {
 	var ident = {ip: ip, readOnly: config.READ_ONLY};
+	if (country
+		&& config.RESTRICTED_COUNTRIES
+		&& config.RESTRICTED_COUNTRIES.indexOf(country) >= 0) {
+		ident.readOnly = true;
+	}
 	var num = parse_ip(ip).num;
 	var ban = range_lookup(RANGES.bans, num);
 	if (ban) {

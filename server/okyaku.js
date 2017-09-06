@@ -8,13 +8,14 @@ var caps = require('./caps'),
 
 var dispatcher = exports.dispatcher = {};
 
-function Okyaku(socket, ip) {
+function Okyaku(socket, ip, country) {
 	events.EventEmitter.call(this);
 
 	this.socket = socket;
-	this.ident = caps.lookup_ident(ip);
+	this.ident = caps.lookup_ident(ip, country);
 	this.watching = {};
 	this.ip = ip;
+	this.country = country;
 
 	var clients = STATE.clientsByIP[ip];
 	if (clients)
@@ -157,10 +158,10 @@ OK.finish_post = function (callback) {
 
 exports.scan_client_caps = function () {
 	for (var ip in STATE.clientsByIP) {
-		var ident = caps.lookup_ident(ip);
 		STATE.clientsByIP[ip].forEach(function (okyaku) {
 			if (!okyaku.id || !okyaku.board)
 				return;
+			var ident = caps.lookup_ident(ip, okyaku.country);
 			if (ident.timeout) {
 				okyaku.blackhole = true;
 				return;
