@@ -1,6 +1,7 @@
 var child_process = require('child_process'),
     fs = require('fs'),
-    util = require('util');
+    util = require('util'),
+    winston = require('winston');
 
 /* Non-wizard-friendly error message */
 function Muggle(message, reason) {
@@ -57,11 +58,21 @@ exports.movex = function (src, dest, callback) {
 };
 
 exports.cpx = function (src, dest, callback) {
+	// try to do a graceful (non-overwriting) copy
 	child_process.execFile('/bin/cp', ['-n', '--', src, dest],
 				function (err, stdout, stderr) {
-		if (err)
-			callback(Muggle("Couldn't copy file into place.",
-					stderr || err));
+		if (err) {
+			winston.warn('overwriting (' + src + ') to (' + dest + ').');
+			// just overwrite
+			child_process.execFile('/bin/cp', ['--', src, dest], function (err, o, e) {
+				if (err)
+					callback(Muggle("Couldn't copy file into place.",
+							e || err));
+				else
+					callback(null);
+			});
+
+		}
 		else
 			callback(null);
 	});
