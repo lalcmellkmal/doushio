@@ -1,3 +1,7 @@
+window.hot = new Backbone.Model({
+	readOnly: false,
+});
+
 var Post = Backbone.Model.extend({
 	idAttribute: 'num',
 });

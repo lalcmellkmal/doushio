@@ -147,7 +147,7 @@ function make_reply_box() {
 }
 
 function insert_pbs() {
-	if (config.READ_ONLY || readOnly.indexOf(BOARD) >= 0)
+	if (hot.get('readOnly') || readOnly.indexOf(BOARD) >= 0)
 		return;
 	if (THREAD ? $('aside').length : $ceiling.next().is('aside'))
 		return;

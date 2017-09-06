@@ -482,7 +482,7 @@ function long_term_timeslot(when) {
 }
 
 Y.reserve_post = function (op, ip, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Can't post right now."));
 	var r = this.connect();
 	if (ipUtils.isLoopback(ip))
@@ -515,7 +515,7 @@ Y.reserve_post = function (op, ip, callback) {
 var optPostFields = 'name trip email auth subject flavor'.split(' ');
 
 Y.insert_post = function (msg, body, extra, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Can't post right now."));
 	var r = this.connect();
 	if (!this.tag)
@@ -907,7 +907,7 @@ Y.archive_thread = function (op, callback) {
 /* BOILERPLATE CITY */
 
 Y.remove_images = function (nums, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
 	var threads = {};
 	var rem = this.remove_image.bind(this, threads);
@@ -924,7 +924,7 @@ Y.remove_images = function (nums, callback) {
 };
 
 Y.remove_image = function (threads, num, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
 	var r = this.connect();
 	var op = OPs[num];
@@ -958,7 +958,7 @@ Y.remove_image = function (threads, num, callback) {
 };
 
 Y.hide_image = function (key, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
 	var r = this.connect();
 	var hash;
@@ -980,7 +980,7 @@ Y.hide_image = function (key, callback) {
 };
 
 Y.force_image_spoilers = function (nums, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
 	var threads = {};
 	var rem = this.spoiler_image.bind(this, threads);
@@ -997,7 +997,7 @@ Y.force_image_spoilers = function (nums, callback) {
 };
 
 Y.spoiler_image = function (threads, num, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
 	var r = this.connect();
 	var op = OPs[num];
@@ -1027,7 +1027,7 @@ Y.spoiler_image = function (threads, num, callback) {
 };
 
 Y.toggle_thread_lock = function (op, callback) {
-	if (config.READ_ONLY)
+	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
 	if (OPs[op] != op)
 		return callback(Muggle('Thread does not exist.'));

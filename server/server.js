@@ -136,6 +136,10 @@ function synchronize(msg, client) {
 			});
 		}
 
+		if (client.ident.readOnly) {
+			logs.push('0,' + common.MODEL_SET + ',["hot"],{"readOnly":true}');
+		}
+
 		var sync = '0,' + common.SYNCHRONIZE;
 		if (dead_threads.length)
 			sync += ',' + JSON.stringify(dead_threads);

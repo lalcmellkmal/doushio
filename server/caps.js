@@ -181,8 +181,8 @@ function parse_suspensions(suspensions) {
 	return parsed;
 }
 
-exports.lookup_ident = function (ip) {
-	var ident = {ip: ip};
+exports.lookup_ident = function (ip, country) {
+	var ident = {ip: ip, readOnly: config.READ_ONLY};
 	var num = parse_ip(ip).num;
 	var ban = range_lookup(RANGES.bans, num);
 	if (ban) {
