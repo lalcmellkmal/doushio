@@ -10,6 +10,7 @@ var _ = require('../lib/underscore'),
     check = require('./msgcheck').check,
     common = require('../common'),
     config = require('../config'),
+    crypto = require('crypto'),
     db = require('../db'),
     fs = require('fs'),
     hooks = require('../hooks'),
@@ -347,7 +348,8 @@ function (req, resp) {
 	var paginationHtml;
 	yaku.once('begin', function (thread_count) {
 		var nav = page_nav(thread_count, -1, board == 'archive');
-		render.write_board_head(resp, board, nav);
+		var initScript = make_init_script(req.ident);
+		render.write_board_head(resp, initScript, board, nav);
 		paginationHtml = render.make_pagination_html(nav);
 		resp.write(paginationHtml);
 		resp.write('<hr>\n');
@@ -405,7 +407,8 @@ function (req, resp) {
 	var board = this.board;
 	var nav = page_nav(this.threadCount, this.page, board == 'archive');
 	resp = write_gzip_head(req, resp, web.noCacheHeaders);
-	render.write_board_head(resp, board, nav);
+	var initScript = make_init_script(req.ident);
+	render.write_board_head(resp, initScript, board, nav);
 	var paginationHtml = render.make_pagination_html(nav);
 	resp.write(paginationHtml);
 	resp.write('<hr>\n');
@@ -548,7 +551,8 @@ function (req, resp) {
 	var board = this.board, op = this.op;
 
 	resp = write_gzip_head(req, resp, this.headers);
-	render.write_thread_head(resp, board, op, {
+	var initScript = make_init_script(req.ident);
+	render.write_thread_head(resp, initScript, board, op, {
 		subject: this.subject,
 		abbrev: this.abbrev,
 	});
@@ -632,6 +636,57 @@ web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {
 		url += 'thread/' + thread;
 	cb(null, 303.1, url);
 });
+
+function make_init_script(ident) {
+	var secretKey = STATE.hot.connTokenSecretKey;
+	if (!ident || !ident.country || !secretKey)
+		return '';
+	var payload = JSON.stringify({
+		ip: ident.ip,
+		cc: ident.country,
+		ts: Date.now(),
+	});
+	// encrypt payload as 'ctoken'
+	var iv = crypto.randomBytes(12);
+	var cipher = crypto.createCipheriv('aes-256-gcm', secretKey, iv);
+	var crypted = cipher.update(payload, 'utf8', 'hex');
+	crypted += cipher.final('hex');
+	var authTag = cipher.getAuthTag()
+	if (authTag.length != 16) throw 'auth tag of unexpected length';
+	var combined = iv.toString('hex') + authTag.toString('hex') + crypted;
+	return '\t<script>var ctoken = ' + JSON.stringify(combined) + ';</script>\n';
+}
+
+function decrypt_ctoken(ctoken) {
+	var secretKey = STATE.hot.connTokenSecretKey;
+	if (!secretKey)
+		return null;
+	if (ctoken.length < 56) {
+		winston.warn('ctoken too short');
+		return null;
+	}
+	var iv = new Buffer(ctoken.slice(0, 24), 'hex');
+	if (iv.length != 12) {
+		winston.warn('iv not hex');
+		return null;
+	}
+	var authTag = new Buffer(ctoken.slice(24, 56), 'hex');
+	if (authTag.length != 16) {
+		winston.warn('authTag not hex');
+		return null;
+	}
+	try {
+		var decipher = crypto.createDecipheriv('aes-256-gcm', secretKey, iv);
+		decipher.setAuthTag(authTag);
+		var plain = decipher.update(ctoken.slice(56), 'hex', 'utf8');
+		plain += decipher.final('utf8');
+		return JSON.parse(plain);
+	}
+	catch (e) {
+		winston.warn(e);
+	}
+	return null;
+}
 
 var TWEET_CACHE = {};
 var TWEET_CACHE_LEN = 0;
@@ -1116,6 +1171,27 @@ function start_server() {
 			socket.close();
 			return;
 		}
+
+		// parse ctoken
+		var url = urlParse(socket.url, true);
+		if (url.query && url.query.ctoken) {
+			var token = decrypt_ctoken(url.query.ctoken);
+			if (token) {
+				if (token.ts + 24*60*60*1000 < Date.now()) {
+					// token expired, ask for a new one?
+					winston.warn('ctoken: expired');
+				}
+				if (ip != token.ip)
+					winston.info('ctoken: ' + ip + ' != ' + token.ip);
+				country = token.cc;
+			}
+			else {
+				winston.log('ctoken: invalid from ' + ip);
+			}
+		} else {
+			winston.warn('ctoken: MISSING from ' + ip);
+		}
+
 		var client = new okyaku.Okyaku(socket, ip, country);
 		socket.on('data', client.on_message.bind(client));
 		socket.on('close', client.on_close.bind(client));

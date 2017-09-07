@@ -22,6 +22,7 @@ exports.dbCache = {
 	funThread: 0,
 	addresses: {},
 	ranges: {},
+	connTokenSecretKey: null,
 };
 
 var HOT = exports.hot = {};
@@ -53,6 +54,32 @@ function reload_hot_config(cb) {
 		});
 	});
 }
+
+// load the encryption key for connToken
+hooks.hook('reloadHot', function (hot, cb) {
+	var r = global.redis;
+	var key = 'ctoken-secret-key';
+	r.get(key, function (err, secretHex) {
+		if (err) return cb(err);
+		if (secretHex) {
+			var secretBytes = new Buffer(secretHex, 'hex');
+			if (secretBytes.length != 32)
+				return cb('ctoken secret key is invalid');
+			HOT.connTokenSecretKey = secretBytes;
+			return cb(null);
+		}
+		// generate a new one
+		var secretKey = crypto.randomBytes(32);
+		r.setnx(key, secretKey.toString('hex'), function (err, wasSet) {
+			if (err) return cb(err);
+			if (wasSet)
+				HOT.connTokenSecretKey = secretKey;
+			else
+				assert(!!HOT.connTokenSecretKey);
+			cb(null);
+		});
+	});
+});
 
 function reload_scripts(cb) {
 	var json = path.join('state', 'scripts.json');

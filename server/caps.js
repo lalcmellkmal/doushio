@@ -182,7 +182,7 @@ function parse_suspensions(suspensions) {
 }
 
 exports.lookup_ident = function (ip, country) {
-	var ident = {ip: ip, readOnly: config.READ_ONLY};
+	var ident = {ip, country, readOnly: config.READ_ONLY};
 	if (country
 		&& config.RESTRICTED_COUNTRIES
 		&& config.RESTRICTED_COUNTRIES.indexOf(country) >= 0) {

@@ -104,7 +104,7 @@ function make_link_rels(board, bits) {
 	}).join('');
 }
 
-exports.write_board_head = function (out, board, nav) {
+exports.write_board_head = function (out, initScript, board, nav) {
 	var indexTmpl = RES.indexTmpl;
 	var title = STATE.hot.TITLES[board] || escape(board);
 	var metaDesc = "Real-time imageboard";
@@ -116,6 +116,7 @@ exports.write_board_head = function (out, board, nav) {
 	out.write(escape(metaDesc));
 	out.write(indexTmpl[i++]);
 	out.write(make_board_meta(board, nav));
+	out.write(initScript);
 	out.write(indexTmpl[i++]);
 	if (RES.navigationHtml)
 		out.write(RES.navigationHtml);
@@ -124,7 +125,7 @@ exports.write_board_head = function (out, board, nav) {
 	out.write(indexTmpl[i++]);
 };
 
-exports.write_thread_head = function (out, board, op, opts) {
+exports.write_thread_head = function (out, initScript, board, op, opts) {
 	var indexTmpl = RES.indexTmpl;
 	var title = '/'+escape(board)+'/ - ';
 	if (opts.subject)
@@ -140,6 +141,7 @@ exports.write_thread_head = function (out, board, op, opts) {
 	out.write(escape(metaDesc));
 	out.write(indexTmpl[i++]);
 	out.write(make_thread_meta(board, op, opts.abbrev));
+	out.write(initScript);
 	out.write(indexTmpl[i++]);
 	if (RES.navigationHtml)
 		out.write(RES.navigationHtml);

@@ -139,7 +139,7 @@ function dump_thread(op, board, ident, outputs, cb) {
 		var authDumper = new AuthDumper(reader, outputs.auth);
 
 		var out = outputs.html;
-		render.write_thread_head(out, board, op, {
+		render.write_thread_head(out, '', board, op, {
 			subject: preThread.subject,
 		});
 
