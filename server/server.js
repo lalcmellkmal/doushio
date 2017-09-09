@@ -1122,6 +1122,8 @@ function get_sockjs_script_sync() {
 }
 
 function sockjs_log(sev, message) {
+	if (message.length > 80)
+		message = message.slice(0, 60) + '[\u2026]' + message.slice(message.length - 14);
 	if (sev == 'info')
 		winston.verbose(message);
 	else if (sev == 'error')
