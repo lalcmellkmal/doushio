@@ -1133,6 +1133,9 @@ if (config.DEBUG) {
 	winston.remove(winston.transports.Console);
 	winston.add(winston.transports.Console, {level: 'verbose'});
 }
+else {
+	winston.add(winston.transports.File, {level: 'warn', filename: 'error.log'});
+}
 
 function start_server() {
 	var is_unix_socket = (typeof config.LISTEN_PORT == 'string');
