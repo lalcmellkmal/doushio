@@ -28,8 +28,10 @@ function address_view(addr) {
 	addr = _.extend({}, addr);
 	addr.shallow = false;
 	var clients = STATE.clientsByIP[addr.ip];
-	if (clients && clients.length)
+	if (clients) {
 		addr.count = clients.length;
+		addr.country = clients[0] && clients[0].country || '';
+	}
 	return addr;
 }
 
@@ -42,13 +44,12 @@ okyaku.dispatcher[authcommon.FETCH_ADDRESS] = function (msg, client) {
 	var key = ip_key(ip);
 	var addr = ADDRS[key];
 	if (addr) {
-		client.send([0, common.COLLECTION_ADD, 'addrs',
-				address_view(addr)]);
+		client.send([0, common.COLLECTION_ADD, 'addrs', address_view(addr)]);
 		return true;
 	}
 
 	// Cache miss
-	ADDRS[key] = addr = {ip: ip, key: key, shallow: true};
+	ADDRS[key] = addr = {ip, key, shallow: true};
 	var r = connect();
 	r.hgetall('ip:'+key, function (err, info) {
 		if (err) {
@@ -60,8 +61,7 @@ okyaku.dispatcher[authcommon.FETCH_ADDRESS] = function (msg, client) {
 			return;
 
 		_.extend(addr, info);
-		client.send([0, common.COLLECTION_ADD, 'addrs',
-				address_view(addr)]);
+		client.send([0, common.COLLECTION_ADD, 'addrs', address_view(addr)]);
 	});
 	return true;
 }

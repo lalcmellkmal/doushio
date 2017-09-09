@@ -211,7 +211,7 @@ var AddressView = Backbone.View.extend({
 	render: function () {
 		var attrs = this.model.attributes;
 		if (attrs.shallow) {
-			this.$('.ip').text('Loading...');
+			this.$('.ip').text(attrs.ip ? attrs.ip + ' "\u2026"' : 'Loading...');
 			return this;
 		}
 		this.$('.ip').text(attrs.ip);
@@ -305,6 +305,8 @@ var AddrView = Backbone.View.extend({
 		var text = ip_mnemonic(attrs.ip);
 		if (attrs.name)
 			text += ' "' + attrs.name + '"';
+		if (attrs.country)
+			text += ' ' + attrs.country;
 		this.$el.attr('title', attrs.ip).text(text);
 		return this;
 	},
