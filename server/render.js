@@ -19,7 +19,7 @@ function tamashii(num) {
 
 exports.write_thread_html = function (reader, req, out, opts) {
 	var oneeSama = new common.OneeSama(tamashii);
-	oneeSama.tz_offset = req.tz_offset;
+	oneeSama.tz_offset = parse_timezone(req.cookies.timezone);
 
 	opts.ident = req.ident;
 	caps.augment_oneesama(oneeSama, opts);
@@ -212,3 +212,12 @@ exports.write_page_end = function (out, ident, returnLink) {
 			out.write('<script src="../mod.js"></script>\n');
 	}
 };
+
+function parse_timezone(tz) {
+	if (!tz && tz != 0)
+		return null;
+	tz = parseInt(tz, 10);
+	if (isNaN(tz) || tz < -24 || tz > 24)
+		return null;
+	return tz;
+}

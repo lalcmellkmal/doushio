@@ -22,6 +22,7 @@ exports.CLIENT_DEPS = [
 	'client/posting.js',
 	'client/menu.js',
 	'client/conn.js',
+	'client/time.js',
 	'client/notify.js',
 	'client/drop.js',
 	'client/hide.js',
@@ -31,7 +32,6 @@ exports.CLIENT_DEPS = [
 	'client/gravitas.js',
 	'curfew/client.js',
 	'report/client.js',
-	'time/client.js',
 ];
 
 exports.SERVER_DEPS = [
@@ -69,7 +69,6 @@ exports.SERVER_DEPS = [
 	'server/server.js',
 	'server/state.js',
 	'server/web.js',
-	'time/server.js',
 	'tripcode/tripcode.cc',
 ];
 
