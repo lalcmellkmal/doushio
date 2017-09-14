@@ -48,8 +48,6 @@ var config = {
 	// API key with Youtube Data API v3 (browser) access
 	// obtain from https://console.developers.google.com
 	GOOGLE_API_KEY: '',
-
-	VOICE_PATH: 'voice',
 };
 
 module.exports = config;
