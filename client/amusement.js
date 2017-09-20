@@ -77,7 +77,7 @@ function construct_banner(parts) {
 	$banner.empty();
 	parts.forEach(function (part) {
 		if (part.href)
-			$('<a></a>', _.extend({target: '_blank'}, part)
+			$('<a></a>', _.extend({target: '_blank', rel: 'noopener noreferrer'}, part)
 					).appendTo($banner);
 		else
 			$banner.append(document.createTextNode(part));

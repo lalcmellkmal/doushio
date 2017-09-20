@@ -33,6 +33,8 @@ server {
 	# The trailing "/" is important.
 	location /ass/ {
 		alias /path/to/doushio/www/;
+		expires 2d;
+		add_header X-Content-Type-Options nosniff;
 	}
 
 	# Handles image uploads.

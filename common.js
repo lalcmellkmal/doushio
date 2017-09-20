@@ -553,7 +553,7 @@ if (LINKIFY) { OS.linkify = function (text) {
 			var e = escape_html(bits[i]);
 			// open in new tab, and disavow target
 			this.callback(safe('<a href="' + e +
-					'" rel="nofollow" target="_blank">' +
+					'" rel="nofollow noopener noreferrer" target="_blank">' +
 					e + '</a>'));
 		}
 		else
@@ -607,7 +607,7 @@ exports.pick_spoiler = pick_spoiler;
 function new_tab_link(srcEncoded, inside, cls) {
 	return [safe('<a href="' + srcEncoded + '" target="_blank"' +
 		(cls ? ' class="'+cls+'"' : '') +
-		' rel="nofollow">'), inside, safe('</a>')];
+		' rel="noreferrer nofollow noopener">'), inside, safe('</a>')];
 }
 
 
@@ -808,7 +808,8 @@ OS.atama = function (data) {
 	header.push(safe('</b>'));
 	if (data.email) {
 		header.unshift(safe('<a class="email" href="mailto:'
-			+ encodeURI(data.email) + '" target="_blank">'));
+			+ encodeURI(data.email)
+			+ '" ref="noopener noreferrer" target="_blank">'));
 		header.push(safe('</a>'));
 	}
 	header.push(safe(' <time datetime="' + datetime(data.time) +
