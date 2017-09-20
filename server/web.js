@@ -134,7 +134,7 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 		if (log)
 			winston.verbose(method.toUpperCase() + ' ' + req.url + ' 200');
 		if (method == 'head') {
-			var headers = (arg && arg.headers) || vanillaHeaders;
+			var headers = (arg && arg.headers) || noCacheHeaders;
 			resp.writeHead(200, headers);
 			resp.end();
 			if (resource.tear_down)
@@ -305,10 +305,6 @@ exports.route_post_auth = function (pattern, handler) {
 			handler: auth_checker.bind(null, handler, true)});
 };
 
-var vanillaHeaders = {
-	'Content-Type': 'text/html; charset=UTF-8',
-	'X-Frame-Options': 'sameorigin',
-};
 var noCacheHeaders = {'Content-Type': 'text/html; charset=UTF-8',
 		'Expires': 'Thu, 01 Jan 1970 00:00:00 GMT',
 		'Cache-Control': 'no-cache, no-store',
@@ -316,7 +312,6 @@ var noCacheHeaders = {'Content-Type': 'text/html; charset=UTF-8',
 };
 var preamble = '<!doctype html><meta charset=utf-8>';
 
-exports.vanillaHeaders = vanillaHeaders;
 exports.noCacheHeaders = noCacheHeaders;
 
 exports.notFoundHtml = preamble + '<title>404</title>404';
@@ -365,8 +360,8 @@ function timeout(resp) {
 
 function redirect(resp, uri, code) {
 	var headers = {Location: uri};
-	for (var k in vanillaHeaders)
-		headers[k] = vanillaHeaders[k];
+	for (var k in noCacheHeaders)
+		headers[k] = noCacheHeaders[k];
 	resp.writeHead(code || 303, headers);
 	resp.end(preamble + '<title>Redirect</title>'
 		+ '<a href="' + encodeURI(uri) + '">Proceed</a>.');
