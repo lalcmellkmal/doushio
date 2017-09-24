@@ -348,7 +348,7 @@ IU.verify_image = function (err) {
 	var self = this;
 	async.parallel(checks, function (err, rs) {
 		if (err)
-			return self.failure(Muggle('Bad image.'));
+			return self.failure(Muggle('Wrong image type.', err));
 		image.size = rs.stat.size;
 		image.dims = [rs.dims.width, rs.dims.height];
 		if (rs.apng)
