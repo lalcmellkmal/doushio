@@ -599,11 +599,12 @@ web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {
 
 function make_init_script(ident) {
 	var secretKey = STATE.hot.connTokenSecretKey;
-	if (!ident || !ident.country || !secretKey)
+	if (!ident || !secretKey)
 		return '';
+	var country = ident.country || 'x';
 	var payload = JSON.stringify({
 		ip: ident.ip,
-		cc: ident.country,
+		cc: country,
 		ts: Date.now(),
 	});
 	// encrypt payload as 'ctoken'
