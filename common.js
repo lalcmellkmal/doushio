@@ -524,7 +524,7 @@ OS.kinpira = function (text) {
 /// 6th tokenization stage; parses individual *italic* *words*
 OS.itameshi = function (text) {
 	while (true) {
-		var m = /(^| )\*([^ *]+)\*($| )/.exec(text);
+		var m = /(^|[ .,;:?!(-])\*([^ *]+)\*($|[ .,;:?!)-])/.exec(text);
 		if (!m)
 			break;
 		if (m.index > 0) {
