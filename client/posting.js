@@ -1010,6 +1010,11 @@ dispatcher[IMAGE_STATUS] = function (msg) {
 };
 
 window.addEventListener('message', function (event) {
+	var uploadOrigin = imagerConfig.UPLOAD_ORIGIN;
+	if (uploadOrigin && uploadOrigin != '*') {
+		if (event.origin && event.origin !== uploadOrigin)
+			return;
+	}
 	var msg = event.data;
 	if (msg == 'OK')
 		return;
