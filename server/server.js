@@ -15,7 +15,8 @@ var _ = require('../lib/underscore'),
     fs = require('fs'),
     hooks = require('../hooks'),
     imager = require('../imager'),
-    Muggle = require('../etc').Muggle,
+    etc = require('../etc'),
+    Muggle = etc.Muggle,
     okyaku = require('./okyaku'),
     render = require('./render'),
     request = require('request'),
@@ -615,7 +616,7 @@ function make_init_script(ident) {
 	var authTag = cipher.getAuthTag()
 	if (authTag.length != 16) throw 'auth tag of unexpected length';
 	var combined = iv.toString('hex') + authTag.toString('hex') + crypted;
-	return '\t<script>var ctoken = ' + JSON.stringify(combined) + ';</script>\n';
+	return '\t<script>var ctoken = ' + json_paranoid(combined) + ';</script>\n';
 }
 
 function decrypt_ctoken(ctoken) {

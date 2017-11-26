@@ -88,3 +88,7 @@ exports.checked_mkdir = function (dir, cb) {
 exports.random_id = function () {
 	return Math.floor(Math.random() * 1e16) + 1;
 };
+
+exports.json_paranoid = function (obj) {
+	return JSON.stringify(obj).replace(/\//g, '\\x2f');
+};
