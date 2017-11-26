@@ -309,6 +309,7 @@ var noCacheHeaders = {'Content-Type': 'text/html; charset=UTF-8',
 		'Expires': 'Thu, 01 Jan 1970 00:00:00 GMT',
 		'Cache-Control': 'no-cache, no-store',
 		'X-Frame-Options': 'sameorigin',
+		'X-XSS-Protection': '1',
 };
 var preamble = '<!doctype html><meta charset=utf-8>';
 

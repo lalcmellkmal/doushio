@@ -616,7 +616,7 @@ function make_init_script(ident) {
 	var authTag = cipher.getAuthTag()
 	if (authTag.length != 16) throw 'auth tag of unexpected length';
 	var combined = iv.toString('hex') + authTag.toString('hex') + crypted;
-	return '\t<script>var ctoken = ' + json_paranoid(combined) + ';</script>\n';
+	return '\t<script>var ctoken = ' + etc.json_paranoid(combined) + ';</script>\n';
 }
 
 function decrypt_ctoken(ctoken) {
