@@ -383,6 +383,15 @@ pre, .themed {
 	}
 }
 
+article, article header {
+	transition: background-color 1.5s, border-color 1.5s, color 1.5s;
+	-webkit-transition: background-color 1.5s, border-color 1.5s, color 1.5s;
+}
+#trans {
+	transition: color 1.5s;
+	-webkit-transition: color 1.5s;
+}
+
 @media screen and (max-device-width: 480px) and (orientation: portrait) {
 	section > blockquote, section > header, section > #banner, section > .omit {
 		margin-left: 0.5em;
