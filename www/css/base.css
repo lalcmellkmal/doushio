@@ -73,6 +73,15 @@ figure img {
 	float: left;
 	margin: 3px 20px 20px 0;
 	vertical-align: top;
+
+	opacity: 1;
+	transition: opacity 1s, transform 1s;
+	-webkit-transition: opacity 1s, -webkit-transform 1s;
+}
+figure img.new {
+	opacity: 0;
+	transform: scale(0.8);
+	-webkit-transform: scale(0.8);
 }
 h1, h2 {
 	text-align: center;

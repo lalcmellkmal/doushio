@@ -433,11 +433,17 @@ dispatcher[SPOILER_IMAGES] = function (msg, op) {
 };
 
 function insert_image(info, header, toppu) {
-	var fig = $(flatten(oneeSama.gazou(info, toppu)).join(''));
+	var html = flatten(oneeSama.gazou(info, toppu)).join('');
+	// HACK ought to add `class="new"` in common?
+	html = html.replace(/<img src/, '<img class="new" src');
+	var fig = $(html);
 	if (toppu)
 		header.before(fig);
 	else
 		header.after(fig);
+
+	// fade in
+	setTimeout(function () { fig.find('img').removeClass('new'); }, 10);
 }
 
 function set_highlighted_post(num) {
