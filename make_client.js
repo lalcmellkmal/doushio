@@ -1,9 +1,10 @@
 var async = require('async'),
     child_process = require('child_process'),
     config = require('./config'),
+    fs = require('fs'),
     imagerConfig = require('./imager/config'),
     reportConfig = require('./report/config'),
-    fs = require('fs'),
+    streamBuffers = require('stream-buffers'),
     util = require('util');
 
 function make_client(inputs, out, cb) {
@@ -104,29 +105,22 @@ fs.readFile(file, 'UTF-8', function (err, fullFile) {
 exports.make_client = make_client;
 
 function make_minified(files, out, cb) {
-
-	// would be nice if uglify streamed...
-	require('tmp').file({
-		postfix: '.gen.js',
-	},
-	function (err, tmp, fd) {
-		if (err) return cb(err);
-		var out = fs.createWriteStream(null, {fd: fd});
-		out.once('error', cb);
-		make_client(files, out, function (err) {
-			if (err)
-				return cb(err);
-			out.end(function () {
-				minify(tmp);
-			});
-		});
+	var buf = new streamBuffers.WritableStreamBuffer();
+	buf.once('error', cb);
+	make_client(files, buf, function (err) {
+		if (err)
+			return cb(err);
+		var src = buf.getContentsAsString('utf-8');
+		if (!src || !src.length)
+			return cb('make_minified: no client JS was generated');
+		minify(src);
 	});
 
-	function minify(file) {
-		var UglifyJS = require('uglify-js');
+	function minify(src) {
+		var UglifyJS = require('uglify-es');
 		var ugly;
 		try {
-			ugly = UglifyJS.minify(file, {
+			ugly = UglifyJS.minify(src, {
 				mangle: false,
 			});
 		}

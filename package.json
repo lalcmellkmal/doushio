@@ -26,7 +26,9 @@
 		"redis": "2.6.3",
 		"request": "2.79",
 		"sockjs": "0.3.18",
+		"stream-buffers": "^3.0.1",
 		"tmp": "0.0.31",
+		"uglify-es": "^3.3.9",
 		"uglify-js": "2.7.5",
 		"winston": "2.3.0"
 	},
