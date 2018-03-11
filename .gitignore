@@ -7,10 +7,12 @@
 authdump
 config.js
 graveyard
+error.log
 findapng
 hot.js
 jsmin
 node_modules/
+package-lock.json
 perceptual
 imager/tmp
 state
