@@ -6,18 +6,20 @@ var caps = require('../server/caps'),
     msgcheck = require('../server/msgcheck'),
     nodemailer = require('nodemailer'),
     okyaku = require('../server/okyaku'),
-    recaptcha = require('recaptcha'),
+    Recaptcha2 = require('recaptcha2'),
     smtpTransport = require('nodemailer-smtp-transport'),
     winston = require('winston');
 
 var SMTP = nodemailer.createTransport(smtpTransport(config.SMTP));
 
-const ERRORS = {
-	'invalid-site-private-key': "Sorry, the server isn't set up with reCAPTCHA properly.",
-	'invalid-request-cookie': "Something went wrong with our reCAPTCHA token. Please try again.",
-	'incorrect-captcha-sol': "Incorrect.",
-	'captcha-timeout': "Sorry, you took too long. Please try again.",
-};
+var VALIDATOR;
+if (!!config.RECAPTCHA_SITE_KEY) {
+	VALIDATOR = new Recaptcha2({
+		siteKey: config.RECAPTCHA_SITE_KEY,
+		secretKey: config.RECAPTCHA_SECRET_KEY,
+	});
+	exports.enabled = true;
+}
 
 var safe = common.safe;
 
@@ -135,7 +137,7 @@ function maybe_mnemonic(ip) {
 }
 
 okyaku.dispatcher[common.REPORT_POST] = function (msg, client) {
-	if (!msgcheck.check(['id', 'string', 'string'], msg))
+	if (!msgcheck.check(['id', 'string'], msg))
 		return false;
 
 	var num = msg[0];
@@ -143,24 +145,13 @@ okyaku.dispatcher[common.REPORT_POST] = function (msg, client) {
 	if (!op || !caps.can_access_thread(client.ident, op))
 		return reply_error("Post does not exist.");
 
-	var data = {
-		remoteip: client.ident.ip,
-		challenge: msg[1],
-		response: msg[2].trim(),
-	};
-	if (!data.challenge || !data.response)
+	const response = msg[1];
+	if (!response)
 		return reply_error("Pretty please?");
-	if (data.challenge.length > 10000 || data.response.length > 10000)
+	if (response.length > 10000)
 		return reply_error("tl;dr");
 
-	var checker = new recaptcha.Recaptcha(config.RECAPTCHA_PUBLIC_KEY,
-			config.RECAPTCHA_PRIVATE_KEY, data);
-	checker.verify(function (ok, err) {
-		if (!ok) {
-			reply_error(ERRORS[err] || err);
-			return;
-		}
-
+	VALIDATOR.validate(response, client.ident.ip).then(function () {
 		var op = db.OPs[num];
 		if (!op)
 			return reply_error("Post does not exist.");
@@ -172,6 +163,11 @@ okyaku.dispatcher[common.REPORT_POST] = function (msg, client) {
 			// success!
 			client.send([op, common.REPORT_POST, num]);
 		});
+	}, function (err) {
+		let readable = VALIDATOR.translateErrors(err);
+		if (Array.isArray(readable))
+			readable = readable.join('; ');
+		reply_error(readable);
 	});
 	return true;
 
