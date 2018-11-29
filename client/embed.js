@@ -236,7 +236,7 @@ $DOC.on('mouseenter', '.soundcloud', function (event) {
 
 /* TWITTER */
 
-window.twitter_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|mobile\.|m\.)?twitter\.com\/(\w{1,15})\/status\/(\d{4,20})\/?/;
+window.twitter_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|mobile\.|m\.)?twitter\.com\/(\w{1,15})\/status\/(\d{4,20})\/?(?:\?s=\d+)?/;
 
 $DOC.on('click', '.tweet', function (e) {
 	if (e.which > 1 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
