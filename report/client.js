@@ -51,7 +51,6 @@ var Report = Backbone.Model.extend({
 			}
 		};
 		setTimeout(() => {
-			debugger;
 			window.grecaptcha.render(id, params);
 		}, 10);
 	},
@@ -203,7 +202,15 @@ var ReportPanel = Backbone.View.extend({
 var ajaxJs = 'https://www.google.com/recaptcha/api.js?onload=on_init_captcha&render=explicit';
 
 var CAPTCHA_LOADED = false;
-window.on_init_captcha = () => { CAPTCHA_LOADED = true; };
+var CAPTCHA_PENDING_ID = 0;
+window.on_init_captcha = () => {
+	CAPTCHA_LOADED = true;
+	let model = REPORTS[CAPTCHA_PENDING_ID];
+	CAPTCHA_PENDING_ID = 0;
+	if (model) {
+		model.request_new();
+	}
+};
 
 menuHandlers.Report = function (post) {
 	var num = post.id;
@@ -224,17 +231,18 @@ menuHandlers.Report = function (post) {
 		model.request_new();
 		return;
 	}
+	CAPTCHA_PENDING_ID = num;
 	$.getScript(ajaxJs, () => {
-		// why is `grecaptcha` not immediately available?
+		// time out if it doesn't call on_init_captcha
 		setTimeout(() => {
-			if (CAPTCHA_LOADED)
-				model.request_new();
-			else
+			if (CAPTCHA_PENDING_ID == num) {
 				model.set({
 					status: 'error',
 					error: "Couldn't load reCATPCHA.",
 				});
-		}, 10);
+				CAPTCHA_PENDING_ID = 0;
+			}
+		}, 5000);
 	});
 };
 
