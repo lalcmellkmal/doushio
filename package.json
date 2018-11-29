@@ -18,16 +18,16 @@
 		"start": "node server/server.js"
 	},
 	"dependencies": {
-		"async": "2.1.4",
+		"async": "2.6.1",
 		"formidable": "1.0.17",
 		"minimist": "1.2.0",
 		"nan": "2.11.1",
-		"recaptcha2": "^1.3.2",
-		"redis": "2.6.3",
-		"request": "2.79",
-		"sockjs": "0.3.18",
-		"stream-buffers": "^3.0.1",
-		"tmp": "0.0.31",
+		"recaptcha2": "1.3.3",
+		"redis": "2.8.0",
+		"request": "2.88.0",
+		"sockjs": "0.3.19",
+		"stream-buffers": "3.0.2",
+		"tmp": "0.0.33",
 		"uglify-es": "^3.3.9",
 		"uglify-js": "2.7.5",
 		"winston": "2.3.0"
