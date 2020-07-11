@@ -1,8 +1,8 @@
-var opts = require('./opts');
+const opts = require('./opts');
 if (require.main == module) opts.parse_args();
 opts.load_defaults();
 
-var _ = require('../lib/underscore'),
+const _ = require('../lib/underscore'),
     amusement = require('./amusement'),
     async = require('async'),
     auth = require('./auth'),
@@ -19,7 +19,7 @@ var _ = require('../lib/underscore'),
     Muggle = etc.Muggle,
     okyaku = require('./okyaku'),
     render = require('./render'),
-    request = require('request'),
+    fetch = require('node-fetch'),
     STATE = require('./state'),
     tripcode = require('./../tripcode/tripcode'),
     urlParse = require('url').parse,
@@ -652,6 +652,8 @@ function decrypt_ctoken(ctoken) {
 
 var TWEET_CACHE = {};
 var TWEET_CACHE_LEN = 0;
+const TWEET_CACHE_MAX = 100;
+const TWEET_CACHE_EXPIRY = 600*1000;
 
 function expire_tweet(key) {
 	if (TWEET_CACHE[key]) {
@@ -662,41 +664,34 @@ function expire_tweet(key) {
 
 web.resource(/^\/outbound\/tweet\/(\w{1,15}\/status\/\d{4,20})$/,
 function (req, params, cb) {
-	var url = 'https://twitter.com/' + params[1];
+	let tweet_url = 'https://twitter.com/' + params[1];
 	if (/^\d+$/.test(req.query.s))
-		url += '?s=' + req.query.s;
-	var theme = req.query.theme == 'dark' ? 'dark' : 'light';
-	var params = {
-		url: url,
-		omit_script: true,
-		theme: theme,
-	};
-	var key = 'tw:'+url;
+		tweet_url += '?s=' + req.query.s;
+	let url = new URL('https://publish.twitter.com/oembed');
+	url.searchParams.append('url', tweet_url);
+	url.searchParams.append('omit_script', 'true');
+	url.searchParams.append('theme', req.query.theme == 'dark' ? 'dark' : 'light');
+	let key = 'tw:'+url;
 	if (TWEET_CACHE[key])
 		return cb(null, 'ok', TWEET_CACHE[key]);
 
-	request.get({
-		uri: 'https://publish.twitter.com/oembed',
-		qs: params,
-		json: true,
-	}, function (err, twResp, json) {
-		if (err)
-			return cb(err);
-		var code = twResp.statusCode;
-		if (code < 200 || code >= 300) {
-			if (code == 404)
+	fetch(url).catch(cb).then(resp => {
+		if (!resp.ok) {
+			if (resp.status == 404)
 				cb(404);
 			else
-				cb('twitter returned ' + code);
+				cb('twitter returned ' + resp.statusText);
 			return;
 		}
+		return resp.json();
+	}).then(json => {
 		if (!json.html)
 			return cb('unexpected tweet form');
 
-		if (!TWEET_CACHE[key] && TWEET_CACHE_LEN < 50) {
+		if (!TWEET_CACHE[key] && TWEET_CACHE_LEN < TWEET_CACHE_MAX) {
 			TWEET_CACHE[key] = {json: json};
 			TWEET_CACHE_LEN++;
-			setTimeout(expire_tweet.bind(null, key), 600*1000);
+			setTimeout(expire_tweet.bind(null, key), TWEET_CACHE_EXPIRY);
 		}
 
 		cb(null, 'ok', {json: json});
