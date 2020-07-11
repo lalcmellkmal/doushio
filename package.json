@@ -33,7 +33,6 @@
 		"winston": "2.3.0"
 	},
 	"optionalDependencies": {
-		"node-expat": "2.3.15",
 		"nodemailer": "^6.4.10",
 		"send": "0.14.1"
 	}
