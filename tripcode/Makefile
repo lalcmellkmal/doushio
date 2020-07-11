@@ -1,22 +1,23 @@
 
-all: tripcode.node
+all: build
 
-tripcode.node: build tripcode.cc
+build: tripcode.node
+
+tripcode.node: node_modules tripcode.cc
 	node-gyp build
 	@cp build/Release/$@ $@
 
-build: binding.gyp
+node_modules: package.json binding.gyp
+	npm install
 	node-gyp configure
 
-# Legacy build method: `make waf`
-waf: .build
-	node-waf build
-	@cp .build/*/tripcode.node tripcode.node
+rebuild:
+	node-gyp rebuild
 
-.build: wscript
-	node-waf configure
+test: build
+	node test.js
 
-.PHONY: all clean waf
+.PHONY: all build clean rebuild test waf
 
 clean:
-	rm -rf -- .build build tripcode.node
+	rm -rf -- build node_modules tripcode.node

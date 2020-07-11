@@ -1,0 +1,9 @@
+{
+	"name": "doushio-tripcode",
+	"version": "0.3.2",
+	"description": "Native tripcode implementation",
+	"private": true,
+	"dependencies": {
+		"node-addon-api": "*"
+	}
+}

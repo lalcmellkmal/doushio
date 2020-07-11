@@ -16,7 +16,6 @@ package-lock.json
 perceptual
 imager/tmp
 state
-tripcode/.build
 tripcode/build
 upkeep/credentials.json
 voice/*.mp3

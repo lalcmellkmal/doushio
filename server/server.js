@@ -1219,8 +1219,7 @@ function non_daemon_pid_setup() {
 if (require.main == module) {
 	if (!process.getuid())
 		throw new Error("Refusing to run as root.");
-	if (!tripcode.setSalt(config.SECURE_SALT))
-		throw "Bad SECURE_SALT";
+	tripcode.setSalt(config.SECURE_SALT);
 	async.series([
 		imager.make_media_dirs,
 		setup_imager_relay,

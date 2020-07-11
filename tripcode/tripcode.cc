@@ -2,34 +2,34 @@
 #include <errno.h>
 #include <iconv.h>
 #include <unistd.h>
-#include <nan.h>
-#include <node.h>
 #include <string.h>
+#include "napi.h"
 
-using namespace v8;
+using namespace Napi;
 
 static char SECURE_SALT[21] = "$5$";
 #define TRIP_MAX 128
 
-void set_salt(const Nan::FunctionCallbackInfo<Value>& info) {
+/// Call this once at startup to set the salt for secure (!!) tripcodes.
+Value set_salt(const CallbackInfo& info) {
+	Env env = info.Env();
+
 	if (info.Length() != 1) {
-		Nan::ThrowTypeError("setSalt takes one argument");
-		return;
+		TypeError::New(env, "setSalt takes one argument")
+			.ThrowAsJavaScriptException();
+		return env.Null();
 	}
-	Nan::Utf8String saltVal(info[0]);
-	if (saltVal.length() != 16) {
-		Nan::ThrowTypeError("setSalt takes a string of length 16");
-		return;
+	String saltVal = info[0].As<String>();
+	std::string salt = saltVal.Utf8Value();
+	if (salt.length() != 16) {
+		TypeError::New(env, "setSalt takes a string of length 16")
+			.ThrowAsJavaScriptException();
+		return env.Null();
 	}
-	char *salt = *saltVal;
-	if (!salt) {
-		Nan::ThrowTypeError("setSalt read a null string?!");
-		return;
-	}
-	memcpy(SECURE_SALT + 3, salt, 16);
+	memcpy(SECURE_SALT + 3, salt.c_str(), 16);
 	SECURE_SALT[19] = '$';
 	SECURE_SALT[20] = 0;
-	info.GetReturnValue().Set(true);
+	return env.Null();
 }
 
 static void fix_char(char &c) {
@@ -97,13 +97,14 @@ static int setup_conv() {
 
 typedef void (*trip_f)(char *, size_t, char *);
 
-static void with_SJIS(Nan::Utf8String &trip, trip_f func, char *ret) {
-	char *src = *trip;
+static bool with_SJIS(std::string trip, trip_f func, char *ret) {
+	// cast for iconv's non-const interface
+	char *src = const_cast<char *>(trip.c_str());
 	if (!src)
-		return;
+		return true;
 	size_t src_left = trip.length(), dest_left = TRIP_MAX;
 	if (!src_left)
-		return;
+		return true;
 	if (src_left > TRIP_MAX / 2)
 		src_left = TRIP_MAX / 2;
 	char sjis[TRIP_MAX+1];
@@ -111,38 +112,53 @@ static void with_SJIS(Nan::Utf8String &trip, trip_f func, char *ret) {
 	size_t result = iconv(conv_desc, &src, &src_left, &dest, &dest_left);
 	if (result == (size_t) -1 && errno != EILSEQ && errno != EINVAL) {
 		perror("iconv");
-		return;
+		return false;
 	}
 	ssize_t len = TRIP_MAX - dest_left;
 	if (len > 0) {
 		sjis[len] = 0;
 		func(sjis, len, ret);
 	}
+	return true;
 }
 
-void hash(const Nan::FunctionCallbackInfo<Value>& info) {
+/// Takes two strings (trip, secure_trip) and returns the hashed tripcode result.
+Value hash(const CallbackInfo& info) {
+	Env env = info.Env();
+
 	if (info.Length() != 2) {
-		Nan::ThrowTypeError("hash takes 2 arguments");
-		return;
+		TypeError::New(env, "hash takes 2 arguments")
+			.ThrowAsJavaScriptException();
+		return Value::From(env, env.Null());
 	}
 
-	Nan::Utf8String trip(info[0]), secure(info[1]);
+	String trip = info[0].As<String>();
+	String secure = info[1].As<String>();
 	char digest[24];
 	digest[0] = 0;
-	with_SJIS(trip, &hash_trip, digest);
-	with_SJIS(secure, &hash_secure, digest + strlen(digest));
+	if (!with_SJIS(trip.Utf8Value(), &hash_trip, digest)) {
+		TypeError::New(env, "trip encoding error")
+			.ThrowAsJavaScriptException();
+		return Value::From(env, env.Null());
+	}
+	if (!with_SJIS(secure.Utf8Value(), &hash_secure, digest + strlen(digest))) {
+		TypeError::New(env, "secure trip encoding error")
+			.ThrowAsJavaScriptException();
+		return Value::From(env, env.Null());
+	}
 
-	Local<String> digest_str = Nan::New(digest).ToLocalChecked();
-	info.GetReturnValue().Set(digest_str);
+	return Value::From(env, digest);
 }
 
-void init(Local<Object> exports) {
-	if (!setup_conv())
-		return;
-	exports->Set(Nan::New("setSalt").ToLocalChecked(),
-			Nan::New<FunctionTemplate>(set_salt)->GetFunction());
-	exports->Set(Nan::New("hash").ToLocalChecked(),
-		Nan::New<FunctionTemplate>(hash)->GetFunction());
+Object init(Env env, Object exports) {
+	if (!setup_conv()) {
+		TypeError::New(env, "Could not set up iconv with SHIFT_JIS")
+			.ThrowAsJavaScriptException();
+		return exports;
+	}
+	exports.Set(String::New(env, "setSalt"), Function::New(env, set_salt));
+	exports.Set(String::New(env, "hash"), Function::New(env, hash));
+	return exports;
 }
 
-NODE_MODULE(tripcode, init)
+NODE_API_MODULE(tripcode, init)
