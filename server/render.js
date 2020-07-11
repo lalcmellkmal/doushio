@@ -18,8 +18,10 @@ function tamashii(num) {
 }
 
 exports.write_thread_html = function (reader, req, out, opts) {
-	var oneeSama = new common.OneeSama(tamashii);
-	oneeSama.tz_offset = parse_timezone(req.cookies.timezone);
+	let oneeSama = new common.OneeSama(tamashii);
+	if (req.cookies) {
+		oneeSama.tz_offset = parse_timezone(req.cookies.timezone);
+	}
 
 	opts.ident = req.ident;
 	caps.augment_oneesama(oneeSama, opts);
