@@ -7,10 +7,9 @@ var caps = require('../server/caps'),
     nodemailer = require('nodemailer'),
     okyaku = require('../server/okyaku'),
     Recaptcha2 = require('recaptcha2'),
-    smtpTransport = require('nodemailer-smtp-transport'),
     winston = require('winston');
 
-var SMTP = nodemailer.createTransport(smtpTransport(config.SMTP));
+var SMTP = nodemailer.createTransport(config.SMTP);
 
 var VALIDATOR;
 if (!!config.RECAPTCHA_SITE_KEY) {
