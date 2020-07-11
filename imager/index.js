@@ -183,7 +183,7 @@ exports.serve_image = function (req, resp) {
 
 exports.squish_MD5 = function (hash) {
 	if (typeof hash == 'string')
-		hash = new Buffer(hash, 'hex');
+		hash = Buffer.from(hash, 'hex');
 	return hash.toString('base64').replace(/\//g, '_').replace(/=*$/, '');
 };
 

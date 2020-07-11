@@ -131,7 +131,7 @@ function MD5_file(path, callback) {
 	stream.on('end', function () {
 		stream.destroy();
 		/* grr stupid digest() won't give us a Buffer */
-		hash = new Buffer(hash.digest('binary'), 'binary');
+		hash = Buffer.from(hash.digest('binary'), 'binary');
 		callback(null, imager.squish_MD5(hash));
 	});
 }

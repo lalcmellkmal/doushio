@@ -62,7 +62,7 @@ hooks.hook('reloadHot', function (hot, cb) {
 	r.get(key, function (err, secretHex) {
 		if (err) return cb(err);
 		if (secretHex) {
-			var secretBytes = new Buffer(secretHex, 'hex');
+			var secretBytes = Buffer.from(secretHex, 'hex');
 			if (secretBytes.length != 32)
 				return cb('ctoken secret key is invalid');
 			HOT.connTokenSecretKey = secretBytes;

@@ -627,12 +627,12 @@ function decrypt_ctoken(ctoken) {
 		winston.warn('ctoken too short');
 		return null;
 	}
-	var iv = new Buffer(ctoken.slice(0, 24), 'hex');
+	var iv = Buffer.from(ctoken.slice(0, 24), 'hex');
 	if (iv.length != 12) {
 		winston.warn('iv not hex');
 		return null;
 	}
-	var authTag = new Buffer(ctoken.slice(24, 56), 'hex');
+	var authTag = Buffer.from(ctoken.slice(24, 56), 'hex');
 	if (authTag.length != 16) {
 		winston.warn('authTag not hex');
 		return null;
