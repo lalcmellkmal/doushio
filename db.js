@@ -1,4 +1,4 @@
-var _ = require('./lib/underscore'),
+const _ = require('./lib/underscore'),
     async = require('async'),
     cache = require('./server/state').dbCache,
     caps = require('./server/caps'),
@@ -13,37 +13,39 @@ var _ = require('./lib/underscore'),
     util = require('util'),
     winston = require('winston');
 
-var imager = require('./imager'); /* set up hooks */
+const imager = require('./imager'); /* set up hooks */
 
-var OPs = exports.OPs = cache.OPs;
-var TAGS = exports.TAGS = cache.opTags;
-var SUBS = exports.SUBS = cache.threadSubs;
+const OPs = exports.OPs = cache.OPs;
+const TAGS = exports.TAGS = cache.opTags;
+const SUBS = exports.SUBS = cache.threadSubs;
 
-var LUA = {};
+const LUA = {};
 function register_lua(name) {
-	var src = fs.readFileSync('lua/' + name + '.lua', 'UTF-8');
+	const src = fs.readFileSync('lua/' + name + '.lua', 'UTF-8');
 	LUA[name] = {src: src};
 }
 
 function redis_client() {
-	var conn = require('redis').createClient(config.REDIS_PORT || undefined);
-	// ASYNC SETUP RACE!
-	for (var k in LUA)
-		load(LUA[k]);
+	const conn = require('redis').createClient(config.REDIS_PORT || undefined);
 
-	function load(entry) {
-		conn.script('load', entry.src, function (err, sha) {
+	// ASYNC SETUP RACE!
+	const load = entry => {
+		conn.script('load', entry.src, (err, sha) => {
 			if (err)
 				throw err;
 			entry.sha = sha;
 		});
-	}
+	};
+
+	for (let k in LUA)
+		load(LUA[k]);
+
 	return conn;
 }
 exports.redis_client = redis_client;
 
 // wait for the `register_lua` calls before connecting
-process.nextTick(function () {
+process.nextTick(() => {
 	global.redis = redis_client();
 });
 
@@ -74,21 +76,21 @@ function Subscription(targetInfo) {
 };
 
 util.inherits(Subscription, events.EventEmitter);
-var S = Subscription.prototype;
+const S = Subscription.prototype;
 
 Subscription.full_key = function (target, ident) {
-	var channel;
+	let channel;
 	if (ident && ident.priv)
 		channel = 'priv:' + ident.priv;
 	else if (caps.can_moderate(ident))
 		channel = 'auth';
-	var key = channel ? channel + ':' + target : target;
+	let key = channel ? channel + ':' + target : target;
 	return {key: key, channel: channel, target: target};
 };
 
 Subscription.get = function (target, ident) {
-	var full = Subscription.full_key(target, ident);
-	var sub = SUBS[full.key];
+	const full = Subscription.full_key(target, ident);
+	let sub = SUBS[full.key];
 	if (!sub)
 		sub = new Subscription(full);
 	return sub;
@@ -102,7 +104,7 @@ S.when_ready = function (cb) {
 };
 
 S.on_one_sub = function (name) {
-	var i = this.pending_subscriptions.indexOf(name);
+	let i = this.pending_subscriptions.indexOf(name);
 	if (i < 0)
 		throw "Obtained unasked-for subscription " + name + "?!";
 	this.pending_subscriptions.splice(i, 1);
@@ -111,24 +113,22 @@ S.on_one_sub = function (name) {
 };
 
 S.on_all_subs = function () {
-	var k = this.k;
+	let k = this.k;
 	k.removeAllListeners('subscribe');
 	k.on('message', this.on_message.bind(this));
 	k.removeAllListeners('error');
 	k.on('error', this.sink_sub.bind(this));
-	this.subscription_callbacks.forEach(function (cb) {
-		cb(null);
-	});
+	this.subscription_callbacks.forEach(cb => cb(null));
 	delete this.pending_subscriptions;
 	delete this.subscription_callbacks;
 };
 
 function parse_pub_message(msg) {
-	var m = msg.match(/^(\d+)\|/);
-	var prefixLen = m[0].length;
-	var bodyLen = parse_number(m[1]);
-	var info = {body: msg.substr(prefixLen, bodyLen)};
-	var suffixPos = prefixLen + bodyLen;
+	const m = msg.match(/^(\d+)\|/);
+	const prefixLen = m[0].length;
+	const bodyLen = parse_number(m[1]);
+	const info = {body: msg.substr(prefixLen, bodyLen)};
+	const suffixPos = prefixLen + bodyLen;
 	if (msg.length > suffixPos)
 		info.suffixPos = suffixPos;
 	return info;
@@ -136,19 +136,20 @@ function parse_pub_message(msg) {
 
 S.on_message = function (chan, msg) {
 	/* Do we need to clarify whether this came from target or fullKey? */
-	var parsed = parse_pub_message(msg), extra;
+	let parsed = parse_pub_message(msg);
+	let extra;
 	if (this.channel && parsed.suffixPos) {
-		var suffix = JSON.parse(msg.slice(parsed.suffixPos));
+		const suffix = JSON.parse(msg.slice(parsed.suffixPos));
 		extra = suffix[this.channel];
 	}
 	msg = parsed.body;
-	var m = msg.match(/^(\d+),(\d+)/);
-	var op = parse_number(m[1]);
-	var kind = parse_number(m[2]);
+	let m = msg.match(/^(\d+),(\d+)/);
+	const op = parse_number(m[1]);
+	const kind = parse_number(m[2]);
 
 	if (extra && kind == common.INSERT_POST) {
 		// add ip to INSERT_POST
-		var m = msg.match(/^(\d+,2,\d+,{)(.+)$/);
+		let m = msg.match(/^(\d+,2,\d+,{)(.+)$/);
 		if (m && extra.ip) {
 			if (/"ip":/.test(msg))
 				throw "`ip` in public pub " + chan;
@@ -162,9 +163,7 @@ S.on_message = function (chan, msg) {
 S.on_sub_error = function (err) {
 	winston.error("Subscription error:", (err.stack || err));
 	this.commit_sudoku();
-	this.subscription_callbacks.forEach(function (cb) {
-		cb(err);
-	});
+	this.subscription_callbacks.forEach(cb => cb(err));
 	this.subscription_callbacks = null;
 };
 
@@ -176,7 +175,7 @@ S.sink_sub = function (err) {
 };
 
 S.commit_sudoku = function () {
-	var k = this.k;
+	const k = this.k;
 	k.removeAllListeners('error');
 	k.removeAllListeners('message');
 	k.removeAllListeners('subscribe');
@@ -189,20 +188,19 @@ S.commit_sudoku = function () {
 
 S.has_no_listeners = function () {
 	/* Possibly idle out after a while */
-	var self = this;
 	if (this.idleOutTimer)
 		clearTimeout(this.idleOutTimer);
-	this.idleOutTimer = setTimeout(function () {
-		self.idleOutTimer = null;
-		if (self.listeners('update').length == 0)
-			self.commit_sudoku();
+	this.idleOutTimer = setTimeout(() => {
+		this.idleOutTimer = null;
+		if (this.listeners('update').length == 0)
+			this.commit_sudoku();
 	}, 30 * 1000);
 };
 
 /* OP CACHE */
 
 function add_OP_tag(tagIndex, op) {
-	var tags = TAGS[op];
+	const tags = TAGS[op];
 	if (tags === undefined)
 		TAGS[op] = tagIndex;
 	else if (typeof tags == 'number') {
@@ -218,10 +216,10 @@ function set_OP_tag(tagIndex, op) {
 }
 
 function OP_has_tag(tag, op) {
-	var index = config.BOARDS.indexOf(tag);
+	const index = config.BOARDS.indexOf(tag);
 	if (index < 0)
 		return false;
-	var tags = TAGS[op];
+	const tags = TAGS[op];
 	if (tags === undefined)
 		return false;
 	if (typeof tags == 'number')
@@ -232,7 +230,7 @@ function OP_has_tag(tag, op) {
 exports.OP_has_tag = OP_has_tag;
 
 exports.first_tag_of = function (op) {
-	var tags = TAGS[op];
+	const tags = TAGS[op];
 	if (tags === undefined)
 		return false;
 	else if (typeof tags == 'number')
@@ -242,19 +240,19 @@ exports.first_tag_of = function (op) {
 };
 
 function tags_of(op) {
-	var tags = TAGS[op];
+	const tags = TAGS[op];
 	if (tags === undefined)
 		return false;
 	else if (typeof tags == 'number')
 		return [config.BOARDS[tags]];
 	else
-		return tags.map(function (i) { return config.BOARDS[i]; });
+		return tags.map(i => config.BOARDS[i]);
 }
 exports.tags_of = tags_of;
 
 function update_cache(chan, msg) {
 	msg = JSON.parse(msg);
-	var op = msg.op, kind = msg.kind, tag = msg.tag;
+	let op = msg.op, kind = msg.kind, tag = msg.tag;
 
 	if (kind == common.INSERT_POST) {
 		if (msg.num)
@@ -268,12 +266,12 @@ function update_cache(chan, msg) {
 		set_OP_tag(config.BOARDS.indexOf(tag), op);
 	}
 	else if (kind == common.DELETE_POSTS) {
-		msg.nums.forEach(function (num) {
+		msg.nums.forEach(num => {
 			delete OPs[num];
 		});
 	}
 	else if (kind == common.DELETE_THREAD) {
-		msg.nums.forEach(function (num) {
+		msg.nums.forEach(num => {
 			delete OPs[num];
 		});
 		delete TAGS[op];
@@ -281,9 +279,9 @@ function update_cache(chan, msg) {
 }
 
 exports.track_OPs = function (callback) {
-	var k = redis_client();
+	const k = redis_client();
 	k.subscribe('cache');
-	k.once('subscribe', function () {
+	k.once('subscribe', () => {
 		load_OPs(callback);
 	});
 	k.on('message', update_cache);
@@ -292,65 +290,61 @@ exports.track_OPs = function (callback) {
 
 exports.on_pub = function (name, handler) {
 	// TODO: share redis connection
-	var k = redis_client();
+	const k = redis_client();
 	k.subscribe(name);
 	k.on('message', handler);
 	/* k persists */
 };
 
 function load_OPs(callback) {
-	var r = global.redis;
-	var boards = config.BOARDS;
-	// Want consistent ordering in the TAGS entries for multi-tag threads
-	// (so do them in series)
-	tail.forEach(boards, scan_board, callback);
+	const r = global.redis;
+	const boards = config.BOARDS;
 
-	var threadsKey;
-	function scan_board(tag, cb) {
-		var tagIndex = boards.indexOf(tag);
+	let threadsKey;
+	let expiryKey = expiry_queue_key();
+
+	const scan_board = (tag, cb) => {
+		const tagIndex = boards.indexOf(tag);
 		threadsKey = 'tag:' + tag_key(tag) + ':threads';
-		r.zrange(threadsKey, 0, -1, function (err, threads) {
+		r.zrange(threadsKey, 0, -1, (err, threads) => {
 			if (err)
 				return cb(err);
-			async.forEach(threads, function (op, cb) {
+			async.forEach(threads, (op, cb) => {
 				op = parse_number(op);
-				var ps = [scan_thread.bind(null,tagIndex,op)];
-				if (!config.READ_ONLY && config.THREAD_EXPIRY
-							&& tag != 'archive') {
-					ps.push(refresh_expiry.bind(null,
-							tag, op));
+				let ps = [scan_thread.bind(null, tagIndex, op)];
+				if (!config.READ_ONLY && config.THREAD_EXPIRY && tag != 'archive') {
+					ps.push(refresh_expiry.bind(null, tag, op));
 				}
 				async.parallel(ps, cb);
 			}, cb);
 		});
-	}
+	};
 
-	function scan_thread(tagIndex, op, cb) {
+	const scan_thread = (tagIndex, op, cb) => {
 		op = parse_number(op);
 		add_OP_tag(tagIndex, op);
 		OPs[op] = op;
-		get_all_replies_and_privs(r, op, function (err, posts) {
+		get_all_replies_and_privs(r, op, (err, posts) => {
 			if (err)
 				return cb(err);
-			posts.forEach(function (num) {
+			posts.forEach(num => {
 				OPs[parse_number(num)] = op;
 			});
 			cb(null);
 		});
-	}
+	};
 
-	var expiryKey = expiry_queue_key();
-	function refresh_expiry(tag, op, cb) {
+	const refresh_expiry = (tag, op, cb) => {
 		if (tag == config.STAFF_BOARD)
 			return cb(null);
-		var entry = op + ':' + tag_key(tag);
-		var queries = ['time', 'immortal'];
-		hmget_obj(r, 'thread:'+op, queries, function (err, thread) {
+		const entry = op + ':' + tag_key(tag);
+		const queries = ['time', 'immortal'];
+		hmget_obj(r, 'thread:'+op, queries, (err, thread) => {
 			if (err)
 				return cb(err);
 			if (!thread.time) {
 				winston.warn('Thread '+op+" doesn't exist.");
-				var m = r.multi();
+				const m = r.multi();
 				m.zrem(threadsKey, op);
 				m.zrem(expiryKey, entry);
 				m.exec(cb);
@@ -358,10 +352,14 @@ function load_OPs(callback) {
 			}
 			if (thread.immortal)
 				return r.zrem(expiryKey, entry, cb);
-			var score = expiry_queue_score(thread.time);
+			const score = expiry_queue_score(thread.time);
 			r.zadd(expiryKey, score, entry, cb);
 		});
 	}
+
+	// Want consistent ordering in the TAGS entries for multi-tag threads
+	// (so do them in series)
+	tail.forEach(boards, scan_board, callback);
 }
 
 function expiry_queue_score(time) {
@@ -391,7 +389,7 @@ function Yakusoku(board, ident) {
 
 util.inherits(Yakusoku, events.EventEmitter);
 exports.Yakusoku = Yakusoku;
-var Y = Yakusoku.prototype;
+const Y = Yakusoku.prototype;
 
 Y.connect = function () {
 	// multiple redis connections are pointless (without slaves)
@@ -402,16 +400,17 @@ Y.disconnect = function () {
 	this.removeAllListeners('end');
 };
 
+// TODO use Map, Promises
 function forEachInObject(obj, f, callback) {
-	var total = 0, complete = 0, done = false, errors = [];
-	function cb(err) {
+	let total = 0, complete = 0, done = false, errors = [];
+	const cb = (err) => {
 		complete++;
 		if (err)
 			errors.push(err);
 		if (done && complete == total)
 			callback(errors.length ? errors : null);
-	}
-	for (var k in obj) {
+	};
+	for (let k in obj) {
 		if (obj.hasOwnProperty(k)) {
 			total++;
 			f(k, cb);
@@ -427,26 +426,24 @@ Y.target_key = function (id) {
 };
 
 Y.kiku = function (targets, on_update, on_sink, callback) {
-	var self = this;
 	this.on_update = on_update;
 	this.on_sink = on_sink;
-	forEachInObject(targets, function (id, cb) {
-		var target = self.target_key(id);
-		var sub = Subscription.get(target, self.ident);
+	forEachInObject(targets, (id, cb) => {
+		const target = this.target_key(id);
+		const sub = Subscription.get(target, this.ident);
 		sub.on('update', on_update);
 		sub.on('error', on_sink);
-		self.subs.push(sub.fullKey);
+		this.subs.push(sub.fullKey);
 		sub.when_ready(cb);
 	}, callback);
 };
 
 Y.kikanai = function () {
-	var self = this;
-	this.subs.forEach(function (key) {
-		var sub = SUBS[key];
+	this.subs.forEach(key => {
+		const sub = SUBS[key];
 		if (sub) {
-			sub.removeListener('update', self.on_update);
-			sub.removeListener('error', self.on_sink);
+			sub.removeListener('update', this.on_update);
+			sub.removeListener('error', this.on_sink);
 			if (sub.listeners('update').length == 0)
 				sub.has_no_listeners();
 		}
@@ -461,9 +458,9 @@ function post_volume(view, body) {
 }
 
 function update_throughput(m, ip, when, quant) {
-	var key = 'ip:' + ip + ':throttle:';
-	var shortKey = key + short_term_timeslot(when);
-	var longKey = key + long_term_timeslot(when);
+	const key = 'ip:' + ip + ':throttle:';
+	const shortKey = key + short_term_timeslot(when);
+	const longKey = key + long_term_timeslot(when);
 	m.incrby(shortKey, quant);
 	m.incrby(longKey, quant);
 	/* Don't want to use expireat in case of timezone trickery
@@ -484,43 +481,43 @@ function long_term_timeslot(when) {
 Y.reserve_post = function (op, ip, callback) {
 	if (this.ident.readOnly)
 		return callback(Muggle("Can't post right now."));
-	var r = this.connect();
-	if (ipUtils.isLoopback(ip))
-		return reserve();
+	const r = this.connect();
 
-	var key = 'ip:' + ip + ':throttle:';
-	var now = Date.now();
-	var shortTerm = key + short_term_timeslot(now);
-	var longTerm = key + long_term_timeslot(now);
-	r.mget([shortTerm, longTerm], function (err, quants) {
-		if (err)
-			return callback(Muggle("Limiter failure.", err));
-		if (quants[0] > config.SHORT_TERM_LIMIT ||
-				quants[1] > config.LONG_TERM_LIMIT)
-			return callback(Muggle('Reduce your speed.'));
-
-		reserve();
-	});
-
-	function reserve() {
-		r.incr('postctr', function (err, num) {
+	const reserve = () => {
+		r.incr('postctr', (err, num) => {
 			if (err)
 				return callback(err);
 			OPs[num] = op || num;
 			callback(null, num);
 		});
-	}
+	};
+
+	if (ipUtils.isLoopback(ip))
+		return reserve();
+
+	const key = 'ip:' + ip + ':throttle:';
+	const now = Date.now();
+	const shortTerm = key + short_term_timeslot(now);
+	const longTerm = key + long_term_timeslot(now);
+	r.mget([shortTerm, longTerm], (err, quants) => {
+		if (err)
+			return callback(Muggle("Limiter failure.", err));
+		if (quants[0] > config.SHORT_TERM_LIMIT || quants[1] > config.LONG_TERM_LIMIT)
+			return callback(Muggle('Reduce your speed.'));
+
+		reserve();
+	});
 };
 
-var optPostFields = 'name trip email auth subject flavor'.split(' ');
+const optPostFields = 'name trip email auth subject flavor'.split(' ');
 
 Y.insert_post = function (msg, body, extra, callback) {
 	if (this.ident.readOnly)
 		return callback(Muggle("Can't post right now."));
-	var r = this.connect();
+	const r = this.connect();
 	if (!this.tag)
 		return callback(Muggle("Can't retrieve board for posting."));
-	var ip = extra.ip, board = extra.board, num = msg.num, op = msg.op;
+	let ip = extra.ip, board = extra.board, num = msg.num, op = msg.op;
 	if (!num)
 		return callback(Muggle("No post num."));
 	else if (!ip)
@@ -532,12 +529,12 @@ Y.insert_post = function (msg, body, extra, callback) {
 		}
 	}
 
-	var view = {time: msg.time, ip: ip, state: msg.state.join()};
-	optPostFields.forEach(function (field) {
+	let view = {time: msg.time, ip: ip, state: msg.state.join()};
+	optPostFields.forEach(field => {
 		if (msg[field])
 			view[field] = msg[field];
 	});
-	var tagKey = 'tag:' + tag_key(this.tag);
+	const tagKey = 'tag:' + tag_key(this.tag);
 	if (op)
 		view.op = op;
 	else {
@@ -553,9 +550,9 @@ Y.insert_post = function (msg, body, extra, callback) {
 		delete msg.image.pinky;
 	}
 
-	var key = (op ? 'post:' : 'thread:') + num;
-	var bump = !op || !common.is_sage(view.email);
-	var m = r.multi();
+	const key = (op ? 'post:' : 'thread:') + num;
+	const bump = !op || !common.is_sage(view.email);
+	const m = r.multi();
 	m.incr(tagKey + ':postctr'); // must be first
 	if (op)
 		m.hget('thread:' + op, 'subject'); // must be second
@@ -577,12 +574,12 @@ Y.insert_post = function (msg, body, extra, callback) {
 	if (msg.links)
 		m.hmset(key + ':links', msg.links);
 
-	var etc = {cacheUpdate: {}};
-	var priv = this.ident.priv;
+	let etc = {cacheUpdate: {}};
+	let priv = this.ident.priv;
 	if (op) {
 		etc.ipNum = num;
 		etc.cacheUpdate.num = num;
-		var pre = 'thread:' + op;
+		const pre = 'thread:' + op;
 		if (priv) {
 			m.sadd(pre + ':privs', priv);
 			m.rpush(pre + ':privs:' + priv, num);
@@ -595,8 +592,8 @@ Y.insert_post = function (msg, body, extra, callback) {
 		// set conditional hide?
 		op = num;
 		if (!view.immortal) {
-			var score = expiry_queue_score(msg.time);
-			var entry = num + ':' + tag_key(this.tag);
+			const score = expiry_queue_score(msg.time);
+			const entry = num + ':' + tag_key(this.tag);
 			m.zadd(expiry_queue_key(), score, entry);
 		}
 		/* Rate-limit new threads */
@@ -613,39 +610,37 @@ Y.insert_post = function (msg, body, extra, callback) {
 	extract(view);
 	delete view.ip;
 
-	var self = this;
 	async.waterfall([
-	function (next) {
+	next => {
 		if (!msg.image)
 			return next(null);
 
 		imager.commit_image_alloc(extra.image_alloc, next);
 	},
-	function (next) {
+	next => {
 		if (ip) {
-			var n = post_volume(view, body);
+			const n = post_volume(view, body);
 			if (n > 0)
 				update_throughput(m, ip, view.time, n);
 			etc.ip = ip;
 		}
 
-		self._log(m, op, common.INSERT_POST, [num, view], etc);
+		this._log(m, op, common.INSERT_POST, [num, view], etc);
 
 		m.exec(next);
 	},
-	function (results, next) {
+	(results, next) => {
 		if (!bump)
 			return next();
-		var postctr = results[0];
-		var subject = subject_val(op,
-				op==num ? view.subject : results[1]);
-		var m = r.multi();
+		let postctr = results[0];
+		const subject = subject_val(op, op==num ? view.subject : results[1]);
+		const m = r.multi();
 		m.zadd(tagKey + ':threads', postctr, op);
 		if (subject)
 			m.zadd(tagKey + ':subjects', postctr, subject);
 		m.exec(next);
 	}],
-	function (err) {
+	err => {
 		if (err) {
 			delete OPs[num];
 			return callback(err);
@@ -656,7 +651,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 
 Y.remove_post = function (from_thread, num, callback) {
 	num = parse_number(num);
-	var op = OPs[num];
+	let op = OPs[num];
 	if (!op)
 		return callback(Muggle('No such post.'));
 	if (op == num) {
@@ -665,30 +660,11 @@ Y.remove_post = function (from_thread, num, callback) {
 		return this.remove_thread(num, callback);
 	}
 
-	var r = this.connect();
-	var self = this;
-	if (from_thread) {
-		var key = 'thread:' + op;
-		r.lrem(key + ':posts', -1, num, function (err, delCount) {
-			if (err)
-				return callback(err);
-			/* did someone else already delete this? */
-			if (delCount != 1)
-				return callback(null, -num);
-			/* record deletion */
-			r.rpush(key + ':dels', num, function (err) {
-				if (err)
-					winston.warn(err);
-				gone_from_thread();
-			});
-		});
-	}
-	else
-		gone_from_thread();
+	let r = this.connect();
 
-	function gone_from_thread() {
-		var key = 'post:' + num;
-		r.hset(key, 'hide', '1', function (err) {
+	const gone_from_thread = () => {
+		let key = 'post:' + num;
+		r.hset(key, 'hide', '1', err => {
 			if (err) {
 				/* Difficult to recover. Whatever. */
 				winston.warn("Couldn't hide: " + err);
@@ -699,23 +675,39 @@ Y.remove_post = function (from_thread, num, callback) {
 			callback(null, [op, num]);
 
 			/* In the background, try to finish the post */
-			self.finish_quietly(key, warn);
-			self.hide_image(key, warn);
+			this.finish_quietly(key, warn);
+			this.hide_image(key, warn);
 		});
 	}
+
+	if (from_thread) {
+		let key = 'thread:' + op;
+		r.lrem(key + ':posts', -1, num, (err, delCount) => {
+			if (err)
+				return callback(err);
+			/* did someone else already delete this? */
+			if (delCount != 1)
+				return callback(null, -num);
+			/* record deletion */
+			r.rpush(key + ':dels', num, err => {
+				if (err)
+					winston.warn(err);
+				gone_from_thread();
+			});
+		});
+	}
+	else
+		gone_from_thread();
 };
 
 Y.remove_posts = function (nums, callback) {
-	var self = this;
-	tail.map(nums, this.remove_post.bind(this, true), all_gone);
-
-	function all_gone(err, dels) {
+	tail.map(nums, this.remove_post.bind(this, true), (err, dels) => {
 		if (err)
 			return callback(err);
-		var threads = {}, already_gone = [];
-		dels.forEach(function (del) {
+		let threads = {}, already_gone = [];
+		dels.forEach(del => {
 			if (Array.isArray(del)) {
-				var op = del[0];
+				const op = del[0];
 				if (!(op in threads))
 					threads[op] = [];
 				threads[op].push(del[1]);
@@ -730,52 +722,51 @@ Y.remove_posts = function (nums, callback) {
 					already_gone);
 		if (_.isEmpty(threads))
 			return callback(null);
-		var m = self.connect().multi();
-		for (var op in threads) {
-			var nums = threads[op];
+		let m = this.connect().multi();
+		for (let op in threads) {
+			let nums = threads[op];
 			nums.sort();
-			var opts = {cacheUpdate: {nums: nums}};
-			self._log(m, op, common.DELETE_POSTS, nums, opts);
+			let opts = {cacheUpdate: {nums: nums}};
+			this._log(m, op, common.DELETE_POSTS, nums, opts);
 		}
 		m.exec(callback);
-	}
+	});
 };
 
 Y.remove_thread = function (op, callback) {
 	if (OPs[op] != op)
 		return callback(Muggle('Thread does not exist.'));
-	var r = this.connect();
-	var key = 'thread:' + op, dead_key = 'dead:' + op;
-	var graveyardKey = 'tag:' + tag_key('graveyard');
-	var privs = null;
-	var etc = {cacheUpdate: {}};
-	var self = this;
+	const r = this.connect();
+	let key = 'thread:' + op, dead_key = 'dead:' + op;
+	let graveyardKey = 'tag:' + tag_key('graveyard');
+	let privs = null;
+	let etc = {cacheUpdate: {}};
 	async.waterfall([
-	function (next) {
+	next => {
 		get_all_replies_and_privs(r, op, next);
 	},
-	function (nums, threadPrivs, next) {
+	(nums, threadPrivs, next) => {
 		etc.cacheUpdate.nums = nums;
 		privs = threadPrivs;
 		if (!nums || !nums.length)
 			return next(null, []);
-		tail.map(nums, self.remove_post.bind(self, false), next);
+		tail.map(nums, this.remove_post.bind(this, false), next);
 	},
-	function (dels, next) {
-		var m = r.multi();
+	(dels, next) => {
+		const m = r.multi();
 		m.incr(graveyardKey + ':bumpctr');
 		m.hgetall(key);
 		m.exec(next);
 	},
-	function (rs, next) {
-		var deadCtr = rs[0], post = rs[1];
-		var tags = parse_tags(post.tags);
-		var subject = subject_val(op, post.subject);
+	(rs, next) => {
+		let deadCtr = rs[0], post = rs[1];
+		let tags = parse_tags(post.tags);
+		let subject = subject_val(op, post.subject);
 		/* Rename thread keys, move to graveyard */
-		var m = r.multi();
-		var expiryKey = expiry_queue_key();
-		tags.forEach(function (tag) {
-			var tagKey = tag_key(tag);
+		const m = r.multi();
+		const expiryKey = expiry_queue_key();
+		tags.forEach(tag => {
+			const tagKey = tag_key(tag);
 			m.zrem(expiryKey, op + ':' + tagKey);
 			m.zrem('tag:' + tagKey + ':threads', op);
 			if (subject)
@@ -783,7 +774,7 @@ Y.remove_thread = function (op, callback) {
 		});
 		m.zadd(graveyardKey + ':threads', deadCtr, op);
 		etc.tags = tags;
-		self._log(m, op, common.DELETE_THREAD, [], etc);
+		this._log(m, op, common.DELETE_THREAD, [], etc);
 		m.hset(key, 'hide', 1);
 		/* Next two vals are checked */
 		m.renamenx(key, dead_key);
@@ -791,53 +782,52 @@ Y.remove_thread = function (op, callback) {
 		m.renamenx(key + ':ips', dead_key + ':ips');
 		m.exec(next);
 	},
-	function (results, done) {
-		var dels = results.slice(-2);
-		if (dels.some(function (x) { return x === 0; }))
+	(results, done) => {
+		let dels = results.slice(-2);
+		if (dels.some(x => x === 0))
 			return done("Already deleted?!");
 		delete OPs[op];
 		delete TAGS[op];
 
 		/* Extra renames now that we have renamenx exclusivity */
-		var m = r.multi();
+		const m = r.multi();
 		m.rename(key + ':posts', dead_key + ':posts');
 		m.rename(key + ':links', dead_key + ':links');
 		if (privs.length) {
 			m.rename(key + ':privs', dead_key + ':privs');
-			privs.forEach(function (priv) {
-				var suff = ':privs:' + priv;
+			privs.forEach(priv => {
+				const suff = ':privs:' + priv;
 				m.rename(key + suff, dead_key + suff);
 			});
 		}
-		m.exec(function (err) {
+		m.exec(err => {
 			done(err, null); /* second arg is remove_posts dels */
 		});
 		/* Background, might not even be there */
-		self.finish_quietly(dead_key, warn);
-		self.hide_image(dead_key, warn);
+		this.finish_quietly(dead_key, warn);
+		this.hide_image(dead_key, warn);
 	}], callback);
 };
 
 Y.archive_thread = function (op, callback) {
-	var r = this.connect();
-	var key = 'thread:' + op, archiveKey = 'tag:' + tag_key('archive');
-	var self = this;
+	const r = this.connect();
+	const key = 'thread:' + op, archiveKey = 'tag:' + tag_key('archive');
 	async.waterfall([
-	function (next) {
-		var m = r.multi();
+	next => {
+		const m = r.multi();
 		m.exists(key);
 		m.hget(key, 'immortal');
 		m.zscore('tag:' + tag_key('graveyard') + ':threads', op);
 		m.exec(next);
 	},
-	function (rs, next) {
+	(rs, next) => {
 		if (!rs[0])
 			return callback(Muggle(key + ' does not exist.'));
 		if (parse_number(rs[1]))
 			return callback(Muggle(key + ' is immortal.'));
 		if (rs[2])
 			return callback(Muggle(key + ' is already deleted.'));
-		var m = r.multi();
+		const m = r.multi();
 		// order counts
 		m.hgetall(key);
 		m.hgetall(key + ':links');
@@ -846,24 +836,24 @@ Y.archive_thread = function (op, callback) {
 		m.lrange(key + ':dels', 0, -1);
 		m.exec(next);
 	},
-	function (rs, next) {
-		var view = rs[0], links = rs[1], replyCount = rs[2],
+	(rs, next) => {
+		let view = rs[0], links = rs[1], replyCount = rs[2],
 				privs = rs[3], dels = rs[4];
-		var subject = subject_val(op, view.subject);
-		var tags = view.tags;
-		var m = r.multi();
+		let subject = subject_val(op, view.subject);
+		let tags = view.tags;
+		const m = r.multi();
 		// move to archive tag only
 		m.hset(key, 'origTags', tags);
 		m.hset(key, 'tags', tag_key('archive'));
 		tags = parse_tags(tags);
-		tags.forEach(function (tag) {
-			var tagKey = 'tag:' + tag_key(tag);
+		tags.forEach(tag => {
+			const tagKey = 'tag:' + tag_key(tag);
 			m.zrem(tagKey + ':threads', op);
 			if (subject)
 				m.zrem(tagKey + ':subjects', subject);
 		});
 		m.zadd(archiveKey + ':threads', op, op);
-		self._log(m, op, common.DELETE_THREAD, [], {tags: tags});
+		this._log(m, op, common.DELETE_THREAD, [], {tags: tags});
 
 		// shallow thread insertion message in archive
 		if (!_.isEmpty(links))
@@ -872,8 +862,8 @@ Y.archive_thread = function (op, callback) {
 		delete view.ip;
 		view.replyctr = replyCount;
 		view.hctr = 0;
-		var etc = {tags: ['archive'], cacheUpdate: {}};
-		self._log(m, op, common.MOVE_THREAD, [view], etc);
+		let etc = {tags: ['archive'], cacheUpdate: {}};
+		this._log(m, op, common.MOVE_THREAD, [view], etc);
 
 		// clear history; note new history could be added
 		// for deletion in the archive
@@ -883,7 +873,7 @@ Y.archive_thread = function (op, callback) {
 		m.del(key + ':ips');
 
 		// delete hidden posts
-		dels.forEach(function (num) {
+		dels.forEach(num => {
 			m.del('post:' + num);
 			m.del('post:' + num + ':links');
 		});
@@ -891,14 +881,12 @@ Y.archive_thread = function (op, callback) {
 
 		if (privs.length) {
 			m.del(key + ':privs');
-			privs.forEach(function (priv) {
-				m.del(key + ':privs:' + priv);
-			});
+			privs.forEach(priv => m.del(key + ':privs:' + priv));
 		}
 
 		m.exec(next);
 	},
-	function (results, done) {
+	(results, done) => {
 		set_OP_tag(config.BOARDS.indexOf('archive'), op);
 		done();
 	}], callback);
@@ -909,49 +897,45 @@ Y.archive_thread = function (op, callback) {
 Y.remove_images = function (nums, callback) {
 	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
-	var threads = {};
-	var rem = this.remove_image.bind(this, threads);
-	var self = this;
-	tail.forEach(nums, rem, function (err) {
+	let threads = {};
+	let rem = this.remove_image.bind(this, threads);
+	tail.forEach(nums, rem, err => {
 		if (err)
 			return callback(err);
-		var m = self.connect().multi();
-		for (var op in threads)
-			self._log(m, op, common.DELETE_IMAGES, threads[op],
-					{tags: tags_of(op)});
+		const m = this.connect().multi();
+		for (let op in threads)
+			this._log(m, op, common.DELETE_IMAGES, threads[op], {tags: tags_of(op)});
 		m.exec(callback);
 	});
 };
 
-Y.remove_image = function (threads, num, callback) {
+Y.remove_image = function (threads, num, cb) {
 	if (this.ident.readOnly)
-		return callback(Muggle("Read-only right now."));
-	var r = this.connect();
-	var op = OPs[num];
+		return cb(Muggle("Read-only right now."));
+	const r = this.connect();
+	const op = OPs[num];
 	if (!op)
-		callback(null, false);
-	var key = (op == num ? 'thread:' : 'post:') + num;
-	var self = this;
-	r.hexists(key, 'src', function (err, exists) {
+		cb(null, false);
+	const key = (op == num ? 'thread:' : 'post:') + num;
+	r.hexists(key, 'src', (err, exists) => {
 		if (err)
-			return callback(err);
+			return cb(err);
 		if (!exists)
-			return callback(null);
-		self.hide_image(key, function (err) {
+			return cb(null);
+		this.hide_image(key, err => {
 			if (err)
-				return callback(err);
-			r.hset(key, 'hideimg', 1, function (err, affected) {
+				return cb(err);
+			r.hset(key, 'hideimg', 1, (err, affected) => {
 				if (err)
-					return callback(err);
+					return cb(err);
 				if (!affected)
-					return callback(null);
+					return cb(null);
 
 				if (threads[op])
 					threads[op].push(num);
 				else
 					threads[op] = [num];
-				r.hincrby('thread:' + op, 'imgctr', -1,
-						callback);
+				r.hincrby('thread:' + op, 'imgctr', -1, cb);
 			});
 		});
 	});
@@ -960,38 +944,36 @@ Y.remove_image = function (threads, num, callback) {
 Y.hide_image = function (key, callback) {
 	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
-	var r = this.connect();
-	var hash;
-	var imgKeys = ['hideimg', 'hash', 'src', 'thumb', 'realthumb', 'mid'];
-	r.hmget(key, imgKeys, move_dead);
+	const r = this.connect();
+	const imgKeys = ['hideimg', 'hash', 'src', 'thumb', 'realthumb', 'mid'];
 
-	function move_dead(err, rs) {
+	const move_dead = (err, rs) => {
 		if (err)
 			return callback(err);
 		if (!rs)
 			return callback(null);
-		var info = {};
-		for (var i = 0; i < rs.length; i++)
+		const info = {};
+		for (let i = 0; i < rs.length; i++)
 			info[imgKeys[i]] = rs[i];
 		if (info.hideimg) /* already gone */
 			return callback(null);
 		hooks.trigger("buryImage", info, callback);
 	}
+
+	r.hmget(key, imgKeys, move_dead);
 };
 
 Y.force_image_spoilers = function (nums, callback) {
 	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
-	var threads = {};
-	var rem = this.spoiler_image.bind(this, threads);
-	var self = this;
-	tail.forEach(nums, rem, function (err) {
+	let threads = {};
+	let rem = this.spoiler_image.bind(this, threads);
+	tail.forEach(nums, rem, err => {
 		if (err)
 			return callback(err);
-		var m = self.connect().multi();
-		for (var op in threads)
-			self._log(m, op, common.SPOILER_IMAGES, threads[op],
-					{tags: tags_of(op)});
+		const m = this.connect().multi();
+		for (let op in threads)
+			this._log(m, op, common.SPOILER_IMAGES, threads[op], {tags: tags_of(op)});
 		m.exec(callback);
 	});
 };
@@ -999,21 +981,20 @@ Y.force_image_spoilers = function (nums, callback) {
 Y.spoiler_image = function (threads, num, callback) {
 	if (this.ident.readOnly)
 		return callback(Muggle("Read-only right now."));
-	var r = this.connect();
-	var op = OPs[num];
+	const r = this.connect();
+	const op = OPs[num];
 	if (!op)
 		callback(null, false);
-	var key = (op == num ? 'thread:' : 'post:') + num;
-	var self = this;
-	var spoilerKeys = ['src', 'spoiler', 'realthumb'];
-	r.hmget(key, spoilerKeys, function (err, info) {
+	const key = (op == num ? 'thread:' : 'post:') + num;
+	const spoilerKeys = ['src', 'spoiler', 'realthumb'];
+	r.hmget(key, spoilerKeys, (err, info) => {
 		if (err)
 			return callback(err);
 		/* no image or already spoilt */
 		if (!info[0] || info[1] || info[2])
 			return callback(null);
-		var index = common.pick_spoiler(-1).index;
-		r.hmset(key, 'spoiler', index, function (err) {
+		const index = common.pick_spoiler(-1).index;
+		r.hmset(key, 'spoiler', index, err => {
 			if (err)
 				return callback(err);
 
@@ -1031,19 +1012,18 @@ Y.toggle_thread_lock = function (op, callback) {
 		return callback(Muggle("Read-only right now."));
 	if (OPs[op] != op)
 		return callback(Muggle('Thread does not exist.'));
-	var r = this.connect();
-	var key = 'thread:' + op;
-	var self = this;
-	r.hexists(key, 'locked', function (err, locked) {
+	const r = this.connect();
+	const key = 'thread:' + op;
+	r.hexists(key, 'locked', (err, locked) => {
 		if (err)
 			return callback(err);
-		var m = r.multi();
+		const m = r.multi();
 		if (locked)
 			m.hdel(key, 'locked');
 		else
 			m.hset(key, 'locked', '1');
-		var act = locked ? common.UNLOCK_THREAD : common.LOCK_THREAD;
-		self._log(m, op, act, []);
+		const act = locked ? common.UNLOCK_THREAD : common.LOCK_THREAD;
+		this._log(m, op, act, []);
 		m.exec(callback);
 	});
 };
@@ -1056,7 +1036,7 @@ function warn(err) {
 }
 
 Y.check_thread_locked = function (op, callback) {
-	this.connect().hexists('thread:' + op, 'locked', function (err, lock) {
+	this.connect().hexists('thread:' + op, 'locked', (err, lock) => {
 		if (err)
 			callback(err);
 		else
@@ -1065,8 +1045,8 @@ Y.check_thread_locked = function (op, callback) {
 };
 
 Y.check_throttle = function (ip, callback) {
-	var key = 'ip:' + ip + ':throttle:thread';
-	this.connect().exists(key, function (err, exists) {
+	const key = 'ip:' + ip + ':throttle:thread';
+	this.connect().exists(key, (err, exists) => {
 		if (err)
 			callback(err);
 		else
@@ -1075,35 +1055,34 @@ Y.check_throttle = function (ip, callback) {
 };
 
 Y.add_image = function (post, alloc, ip, callback) {
-	var r = this.connect();
-	var num = post.num, op = post.op;
+	const r = this.connect();
+	let num = post.num, op = post.op;
 	if (!op)
 		return callback(Muggle("Can't add another image to an OP."));
-	var image = alloc.image;
+	let image = alloc.image;
 	if (!image.pinky)
 		return callback(Muggle("Image is wrong size."));
 	delete image.pinky;
 
-	var key = 'post:' + num;
-	r.exists(key, function (err, exists) {
+	const key = 'post:' + num;
+	r.exists(key, (err, exists) => {
 		if (err)
 			return callback(err);
 		if (!exists)
 			return callback(Muggle("Post does not exist."));
 
-		imager.commit_image_alloc(alloc, function (err) {
+		imager.commit_image_alloc(alloc, (err) => {
 			if (err)
 				return callback(err);
 			add_it();
 		});
 	});
 
-	var self = this;
-	function add_it() {
-		var m = r.multi();
+	const add_it = () => {
+		const m = r.multi();
 		imager.note_hash(image.hash, post.num);
 		// HACK: hmset doesn't like our array, but we need it
-		var orig_dims = image.dims;
+		let orig_dims = image.dims;
 		image.dims = orig_dims.toString();
 		m.hmset(key, image);
 		image.dims = orig_dims;
@@ -1111,42 +1090,40 @@ Y.add_image = function (post, alloc, ip, callback) {
 		m.hincrby('thread:' + op, 'imgctr', 1);
 
 		delete image.hash;
-		self._log(m, op, common.INSERT_IMAGE, [num, image]);
+		this._log(m, op, common.INSERT_IMAGE, [num, image]);
 
-		var now = Date.now();
-		var n = post_volume({image: true});
+		const now = Date.now();
 		update_throughput(m, ip, now, post_volume({image: true}));
 		m.exec(callback);
-	}
+	};
 };
 
 Y.append_post = function (post, tail, old_state, extra, cb) {
-	var m = this.connect().multi();
-	var key = (post.op ? 'post:' : 'thread:') + post.num;
+	const m = this.connect().multi();
+	const key = (post.op ? 'post:' : 'thread:') + post.num;
 	/* Don't need to check .exists() thanks to client state */
 	m.append(key + ':body', tail);
 	/* XXX: fragile */
 	if (old_state[0] != post.state[0] || old_state[1] != post.state[1])
 		m.hset(key, 'state', post.state.join());
 	if (extra.ip) {
-		var now = Date.now();
+		const now = Date.now();
 		update_throughput(m, extra.ip, now, post_volume(null, tail));
 	}
 	if (!_.isEmpty(extra.new_links))
 		m.hmset(key + ':links', extra.new_links);
 
 	// possibly attach data for dice rolls etc. to the update
-	var attached = {post: post, extra: extra, writeKeys: {}, attach: {}};
-	var self = this;
-	hooks.trigger("attachToPost", attached, function (err, attached) {
+	const attached = {post: post, extra: extra, writeKeys: {}, attach: {}};
+	hooks.trigger("attachToPost", attached, (err, attached) => {
 		if (err)
 			return cb(err);
-		for (var h in attached.writeKeys)
+		for (let h in attached.writeKeys)
 			m.hset(key, h, attached.writeKeys[h]);
-		var msg = [post.num, tail];
-		var links = extra.links || {};
+		const msg = [post.num, tail];
+		const links = extra.links || {};
 
-		var a = old_state[0], b = old_state[1];
+		const a = old_state[0], b = old_state[1];
 		// message tail is [... a, b, links, attachment]
 		// default values [... 0, 0, {}, {}] don't need to be sent
 		// to minimize log output
@@ -1159,7 +1136,7 @@ Y.append_post = function (post, tail, old_state, extra, cb) {
 		else if (a)
 			msg.push(a);
 
-		self._log(m, post.op || post.num, common.UPDATE_POST, msg);
+		this._log(m, post.op || post.num, common.UPDATE_POST, msg);
 		m.exec(cb);
 	});
 };
@@ -1167,13 +1144,13 @@ Y.append_post = function (post, tail, old_state, extra, cb) {
 register_lua('finish');
 
 function finish_off(m, key) {
-	var body_key = key.replace('dead', 'thread') + ':body';
+	const body_key = key.replace('dead', 'thread') + ':body';
 	m.evalsha(LUA.finish.sha, 3, key, body_key, 'liveposts');
 }
 
 Y.finish_post = function (post, callback) {
-	var m = this.connect().multi();
-	var key = (post.op ? 'post:' : 'thread:') + post.num;
+	const m = this.connect().multi();
+	const key = (post.op ? 'post:' : 'thread:') + post.num;
 	/* Don't need to check .exists() thanks to client state */
 	finish_off(m, key);
 	this._log(m, post.op || post.num, common.FINISH_POST, [post.num]);
@@ -1181,36 +1158,35 @@ Y.finish_post = function (post, callback) {
 };
 
 Y.finish_quietly = function (key, callback) {
-	var m = this.connect().multi();
+	const m = this.connect().multi();
 	finish_off(m, key);
 	m.exec(callback);
 };
 
 Y.finish_all = function (callback) {
-	var r = this.connect();
-	var self = this;
-	r.smembers('liveposts', function (err, keys) {
+	const r = this.connect();
+	r.smembers('liveposts', (err, keys) => {
 		if (err)
 			return callback(err);
-		async.forEach(keys, function (key, cb) {
-			var isPost = /^post:(\d+)$/.test(key);
+		async.forEach(keys, (key, cb) => {
+			const isPost = /^post:(\d+)$/.test(key);
+			const fini = (err, op) => {
+				if (err)
+					return cb(err);
+				const m = r.multi();
+				finish_off(m, key);
+				let n = parse_number(key.match(/:(\d+)$/)[1]);
+				op = isPost ? parse_number(op) : n;
+				this._log(m, op, common.FINISH_POST, [n]);
+				m.srem('liveposts', key);
+				m.exec(cb);
+			};
 			if (isPost)
 				r.hget(key, 'op', fini);
 			else
 				fini();
-
-			function fini(err, op) {
-				if (err)
-					return cb(err);
-				var m = r.multi();
-				finish_off(m, key);
-				var n = parse_number(key.match(/:(\d+)$/)[1]);
-				op = isPost ? parse_number(op) : n;
-				self._log(m, op, common.FINISH_POST, [n]);
-				m.srem('liveposts', key);
-				m.exec(cb);
-			}
 		}, callback);
+
 	});
 };
 
@@ -1221,9 +1197,9 @@ Y._log = function (m, op, kind, msg, opts) {
 	winston.info("Log: " + msg);
 	if (!op)
 		throw new Error('No OP.');
-	var priv = this.ident.priv;
-	var prefix = priv ? ('priv:' + priv + ':') : '';
-	var key = prefix + 'thread:' + op;
+	const priv = this.ident.priv;
+	const prefix = priv ? ('priv:' + priv + ':') : '';
+	const key = prefix + 'thread:' + op;
 
 	if (common.is_pubsub(kind)) {
 		m.rpush(key + ':history', msg);
@@ -1232,8 +1208,8 @@ Y._log = function (m, op, kind, msg, opts) {
 	if (opts.ipNum)
 		m.hset(key + ':ips', opts.ipNum, opts.ip);
 
-	var opBit = op + ',';
-	var len = opBit.length + msg.length;
+	const opBit = op + ',';
+	const len = opBit.length + msg.length;
 	msg = len + '|' + opBit + msg;
 
 	// we can add an extra trailing message for secret info
@@ -1241,48 +1217,46 @@ Y._log = function (m, op, kind, msg, opts) {
 		msg += JSON.stringify({auth: {ip: opts.ip}});
 
 	m.publish(key, msg);
-	var tags = opts.tags || (this.tag ? [this.tag] : []);
-	tags.forEach(function (tag) {
-		m.publish(prefix + 'tag:' + tag, msg);
-	});
+	const tags = opts.tags || (this.tag ? [this.tag] : []);
+	tags.forEach(tag => m.publish(prefix + 'tag:' + tag, msg));
 
 	if (opts.cacheUpdate) {
-		var info = {kind: kind, tag: tags[0], op: op};
+		const info = {kind: kind, tag: tags[0], op: op};
 		_.extend(info, opts.cacheUpdate);
 		m.publish('cache', JSON.stringify(info));
 	}
 };
 
 Y.fetch_backlogs = function (watching, callback) {
-	var r = this.connect();
-	var combined = [];
-	var inject_ips = caps.can_moderate(this.ident);
-	forEachInObject(watching, function (thread, cb) {
+	const r = this.connect();
+	const combined = [];
+	const inject_ips = caps.can_moderate(this.ident);
+	forEachInObject(watching, (thread, cb) => {
 		if (thread == 'live')
 			return cb(null);
-		var key = 'thread:' + thread;
-		var sync = watching[thread];
-		var m = r.multi();
+		const key = 'thread:' + thread;
+		const sync = watching[thread];
+		const m = r.multi();
 		m.lrange(key + ':history', sync, -1);
 		if (inject_ips) {
 			// would be nice to fetch only the relevant ips...?
 			m.hgetall(key + ':ips');
 		}
-		m.exec(function (err, rs) {
+		m.exec((err, rs) => {
 			if (err)
 				return cb(err);
 
-			var prefix = thread + ',';
-			var ips = inject_ips && rs[1];
+			const prefix = thread + ',';
+			const ips = inject_ips && rs[1];
 
 			// construct full messages from history entries
-			rs[0].forEach(function (entry) {
+			rs[0].forEach(entry => {
 
 				// attempt to inject ip to INSERT_POST log
-				var m = ips && entry.match(/^2,(\d+),{(.+)$/);
-				var ip = m && ips[m[1]];
+				const m = ips && entry.match(/^2,(\d+),{(.+)$/);
+				const ip = m && ips[m[1]];
 				if (ip) {
-					var inject = '"ip":' + JSON.stringify(ip) + ',';
+					const inject = '"ip":' + JSON.stringify(ip) + ',';
 					entry = '2,' + m[1] + ',{' + inject + m[2];
 				}
 
@@ -1291,19 +1265,19 @@ Y.fetch_backlogs = function (watching, callback) {
 
 			cb(null);
 		});
-	}, function (errs) {
+	}, errs => {
 		callback(errs, combined);
 	});
 };
 
 Y.get_post_op = function (num, callback) {
-	var r = this.connect();
-	r.hget('post:' + num, 'op', function (err, op) {
+	const r = this.connect();
+	r.hget('post:' + num, 'op', (err, op) => {
 		if (err)
 			return callback(err);
 		else if (op)
 			return callback(null, num, op);
-		r.exists('thread:' + num, function (err, exists) {
+		r.exists('thread:' + num, (err, exists) => {
 			if (err)
 				callback(err);
 			else if (!exists)
@@ -1315,35 +1289,34 @@ Y.get_post_op = function (num, callback) {
 }
 
 Y.get_tag = function (page) {
-	var r = this.connect();
-	var self = this;
-	var key = 'tag:' + tag_key(this.tag) + ':threads';
-	var reverseOrder = this.tag == 'archive';
+	const r = this.connect();
+	const key = 'tag:' + tag_key(this.tag) + ':threads';
+	const reverseOrder = this.tag == 'archive';
 	if (page < 0 && !reverseOrder)
 		page = 0;
-	var start = page * config.THREADS_PER_PAGE;
-	var end = start + config.THREADS_PER_PAGE - 1;
-	var m = r.multi();
+	let start = page * config.THREADS_PER_PAGE;
+	let end = start + config.THREADS_PER_PAGE - 1;
+	const m = r.multi();
 	if (reverseOrder)
 		m.zrange(key, start, end);
 	else
 		m.zrevrange(key, start, end);
 	m.zcard(key);
-	m.exec(function (err, res) {
+	m.exec((err, res) => {
 		if (err)
-			return self.emit('error', err);
-		var nums = res[0];
+			return this.emit('error', err);
+		let nums = res[0];
 		if (page > 0 && !nums.length)
-			return self.emit('nomatch');
+			return this.emit('nomatch');
 		if (reverseOrder)
 			nums.reverse();
-		self.emit('begin', res[1]);
-		var reader = new Reader(self);
-		reader.on('error', self.emit.bind(self, 'error'));
-		reader.on('thread', self.emit.bind(self, 'thread'));
-		reader.on('post', self.emit.bind(self, 'post'));
-		reader.on('endthread', self.emit.bind(self, 'endthread'));
-		self._get_each_thread(reader, 0, nums);
+		this.emit('begin', res[1]);
+		const reader = new Reader(this);
+		reader.on('error', this.emit.bind(this, 'error'));
+		reader.on('thread', this.emit.bind(this, 'thread'));
+		reader.on('post', this.emit.bind(this, 'post'));
+		reader.on('endthread', this.emit.bind(this, 'endthread'));
+		this._get_each_thread(reader, 0, nums);
 	});
 };
 
@@ -1354,11 +1327,10 @@ Y._get_each_thread = function (reader, ix, nums) {
 		reader.removeAllListeners('end');
 		return;
 	}
-	var self = this;
-	var next_please = function () {
+	const next_please = () => {
 		reader.removeListener('end', next_please);
 		reader.removeListener('nomatch', next_please);
-		self._get_each_thread(reader, ix+1, nums);
+		this._get_each_thread(reader, ix+1, nums);
 	};
 	reader.on('end', next_please);
 	reader.on('nomatch', next_please);
@@ -1372,10 +1344,10 @@ Y._get_each_thread = function (reader, ix, nums) {
 register_lua('get_thread');
 
 function lua_get_thread(r, key, abbrev, cb) {
-	var body_key = key.replace('dead', 'thread') + ':body';
-	var posts_key = key + ':posts';
+	const body_key = key.replace('dead', 'thread') + ':body';
+	const posts_key = key + ':posts';
 	r.evalsha(LUA.get_thread.sha, 4, key, body_key, posts_key, 'liveposts', abbrev,
-	function (err, rs) {
+	(err, rs) => {
 		if (err)
 			return cb(err);
 		if (!rs)
@@ -1384,10 +1356,10 @@ function lua_get_thread(r, key, abbrev, cb) {
 			throw new Error('get_thread.lua unexpected output');
 
 		// activePosts is a hash of hashes; needs to be unbulked on two levels
-		var activeBulk = rs[2];
-		for (var i = 1; i < activeBulk.length; i += 2)
+		const activeBulk = rs[2];
+		for (let i = 1; i < activeBulk.length; i += 2)
 			activeBulk[i] = unbulk(activeBulk[i]);
-		var active = unbulk(activeBulk);
+		const active = unbulk(activeBulk);
 
 		cb(null, {
 			pre: unbulk(rs[0]),
@@ -1410,82 +1382,59 @@ util.inherits(Reader, events.EventEmitter);
 exports.Reader = Reader;
 
 Reader.prototype.get_thread = function (tag, num, opts) {
-	var r = this.y.connect();
-	var graveyard = (tag == 'graveyard');
+	const r = this.y.connect();
+	const graveyard = (tag == 'graveyard');
 	if (graveyard)
 		opts.showDead = true;
-	var key = (graveyard ? 'dead:' : 'thread:') + num;
-	var abbrev = opts.abbrev || 0;
+	const key = (graveyard ? 'dead:' : 'thread:') + num;
+	const abbrev = opts.abbrev || 0;
 
-	var self = this;
-	lua_get_thread(r, key, abbrev, function (err, result) {
+	lua_get_thread(r, key, abbrev, (err, result) => {
 		if (err)
-			return self.emit('error', err);
+			return this.emit('error', err);
 		if (!result || !result.pre || !result.pre.time) {
 			if (!opts.redirect)
-				return self.emit('nomatch');
-			r.hget('post:' + num, 'op',
-						function (err, op) {
+				return this.emit('nomatch');
+			r.hget('post:' + num, 'op', (err, op) => {
 				if (err)
-					self.emit('error', err);
+					this.emit('error', err);
 				else if (!op)
-					self.emit('nomatch');
+					this.emit('nomatch');
 				else
-					self.emit('redirect', op);
+					this.emit('redirect', op);
 			});
 			return;
 		}
-		var opPost = result.pre;
-		var total = result.total;
-		var nums = result.replies;
-		self.postCache = result.active;
+		const opPost = result.pre;
+		let total = result.total;
+		let nums = result.replies;
+		this.postCache = result.active;
 
-		var exists = self.is_visible(opPost, opts);
-		var tags = parse_tags(opPost.tags);
+		const exists = this.is_visible(opPost, opts);
+		const tags = parse_tags(opPost.tags);
 		if (!graveyard && tags.indexOf(tag) < 0) {
 			if (opts.redirect) {
-				var op = OPs[num];
-				return self.emit('redirect', op || num, tags[0]);
+				const op = OPs[num];
+				return this.emit('redirect', op || num, tags[0]);
 			}
 			else
 				exists = false;
 		}
 		if (!exists) {
-			self.emit('nomatch');
+			this.emit('nomatch');
 			return;
 		}
-		self.emit('begin', opPost);
+		this.emit('begin', opPost);
 		opPost.num = num;
 		refine_post(opPost);
 
-		var priv = self.y.ident.priv;
+		let priv = this.y.ident.priv;
 
-		if (opts.showDead || priv) {
-			var m = r.multi();
-			// order is important!
-			if (opts.showDead) {
-				var deadKey = key + ':dels';
-				m.lrange(deadKey, -abbrev, -1);
-				if (abbrev)
-					m.llen(deadKey);
-			}
-			if (priv) {
-				var privsKey = key + ':privs:' + priv;
-				m.lrange(privsKey, -abbrev, -1);
-				if (abbrev)
-					m.llen(privsKey);
-			}
-
-			m.exec(prepared);
-		}
-		else
-			prepared();
-
-		function prepared(err, rs) {
+		const prepared = (err, rs) => {
 			if (err)
-				return self.emit('error', err);
+				return this.emit('error', err);
 			// get results in the same order as before
-			var deadNums, privNums;
+			let deadNums, privNums;
 			if (opts.showDead) {
 				deadNums = rs.shift();
 				if (abbrev)
@@ -1501,24 +1450,45 @@ Reader.prototype.get_thread = function (tag, num, opts) {
 				nums = merge_posts(nums, deadNums, abbrev);
 			if (priv) {
 				nums = merge_posts(nums, privNums, abbrev);
-				if (self.showPrivs)
-					self.privNums = privNums;
+				if (this.showPrivs)
+					this.privNums = privNums;
 			}
-			var omit = Math.max(total - abbrev, 0);
-			self.emit('thread', opPost, omit);
-			self._get_each_reply(0, nums, opts);
+			const omit = Math.max(total - abbrev, 0);
+			this.emit('thread', opPost, omit);
+			this._get_each_reply(0, nums, opts);
+		};
+
+		if (opts.showDead || priv) {
+			const m = r.multi();
+			// order is important!
+			if (opts.showDead) {
+				const deadKey = key + ':dels';
+				m.lrange(deadKey, -abbrev, -1);
+				if (abbrev)
+					m.llen(deadKey);
+			}
+			if (priv) {
+				const privsKey = key + ':privs:' + priv;
+				m.lrange(privsKey, -abbrev, -1);
+				if (abbrev)
+					m.llen(privsKey);
+			}
+
+			m.exec(prepared);
 		}
+		else
+			prepared();
 	});
 };
 
 function merge_posts(nums, privNums, abbrev) {
-	var i = nums.length - 1, pi = privNums.length - 1;
+	let i = nums.length - 1, pi = privNums.length - 1;
 	if (pi < 0)
 		return nums;
-	var merged = [];
+	let merged = [];
 	while (!abbrev || merged.length < abbrev) {
 		if (i >= 0 && pi >= 0) {
-			var num = nums[i], pNum = privNums[pi];
+			let num = nums[i], pNum = privNums[pi];
 			if (parse_number(num) > parse_number(pNum)) {
 				merged.unshift(num);
 				i--;
@@ -1549,44 +1519,43 @@ function can_see_priv(priv, ident) {
 }
 
 Reader.prototype._get_each_reply = function (ix, nums, opts) {
-	var cache = this.postCache;
-	var limit = 20;
+	let cache = this.postCache;
+	let limit = 20;
 
-	var privs = this.privNums;
-	function apply_privs(post) {
+	let privs = this.privNums;
+	const apply_privs = (post) => {
 		if (privs && post.num && _.contains(privs, post.num.toString()))
 			post.priv = true;
-	}
+	};
 
 	// find a run of posts that need to be fetched
-	var end;
+	let end;
 	for (end = ix; end < nums.length && (end - ix) < limit; end++) {
 		if (cache[nums[end]])
 			break;
 	}
 	if (ix < end) {
 		// fetch posts in the ix..end range
-		var range = [];
-		for (var i = ix; i < end; i++)
+		let range = [];
+		for (let i = ix; i < end; i++)
 			range.push(nums[i]);
-		var self = this;
-		this.get_posts('post', range, opts, function (err, posts) {
+		this.get_posts('post', range, opts, (err, posts) => {
 			if (err)
-				return self.emit('error', err);
-			for (var i = 0; i < posts.length; i++) {
-				var post = posts[i];
+				return this.emit('error', err);
+			for (let i = 0; i < posts.length; i++) {
+				let post = posts[i];
 				apply_privs(post);
-				self.emit('post', post);
+				this.emit('post', post);
 			}
-			process.nextTick(self._get_each_reply.bind(self, end, nums, opts));
+			process.nextTick(this._get_each_reply.bind(this, end, nums, opts));
 		});
 		return;
 	}
 
 	// otherwise read posts from cache
 	for (; ix < nums.length; ix++) {
-		var num = nums[ix];
-		var post = cache[num];
+		const num = nums[ix];
+		const post = cache[num];
 		if (!post)
 			break;
 
@@ -1610,32 +1579,31 @@ Reader.prototype._get_each_reply = function (ix, nums, opts) {
 Reader.prototype.get_posts = function (kind, nums, opts, cb) {
 	if (!nums.length)
 		return cb(null, []);
-	var r = this.y.connect();
-	var self = this;
+	const r = this.y.connect();
 
-	var m = r.multi();
-	for (var i = 0; i < nums.length; i++) {
-		var key = kind + ':' + nums[i];
+	const m = r.multi();
+	for (let i = 0; i < nums.length; i++) {
+		const key = kind + ':' + nums[i];
 		m.hgetall(key);
 	}
-	m.exec(function (err, results) {
+	m.exec((err, results) => {
 		if (err)
 			return cb(err);
 
-		var posts = [];
-		for (var i = 0; i < results.length; i++) {
-			var post = results[i];
-			var num = nums[i];
+		let posts = [];
+		for (let i = 0; i < results.length; i++) {
+			const post = results[i];
+			const num = nums[i];
 			post.num = num;
-			if (!self.is_visible(post, opts))
+			if (!this.is_visible(post, opts))
 				continue;
 
 			refine_post(post);
 			if (post.editing && !post.body) {
 				post.body = '[a bug ate this post]';
 
-				var key = kind + ':' + num + ':body';
-				r.exists(key, function (err, existed) {
+				const key = kind + ':' + num + ':body';
+				r.exists(key, (err, existed) => {
 					if (err)
 						winston.warn(err);
 					else if (existed)
@@ -1680,30 +1648,26 @@ function parse_number(n) {
 
 /* Including hidden or private. Not in-order. */
 function get_all_replies_and_privs(r, op, cb) {
-	var key = 'thread:' + op;
-	var m = r.multi();
+	const key = 'thread:' + op;
+	const m = r.multi();
 	m.lrange(key + ':posts', 0, -1);
 	m.smembers(key + ':privs');
-	m.exec(function (err, rs) {
+	m.exec((err, rs) => {
 		if (err)
 			return cb(err);
-		var nums = rs[0], privs = rs[1];
+		let nums = rs[0], privs = rs[1];
 		if (!privs.length)
 			return cb(null, nums, privs);
-		var m = r.multi();
-		privs.forEach(function (priv) {
-			m.lrange(key + ':privs:' + priv, 0, -1);
-		});
-		m.exec(function (err, rs) {
+		const m = r.multi();
+		privs.forEach(priv => m.lrange(key + ':privs:' + priv, 0, -1));
+		m.exec((err, rs) => {
 			if (err)
 				return cb(err);
-			rs.forEach(function (ns) {
-				nums.push.apply(nums, ns);
-			});
+			rs.forEach(ns => nums.push.apply(nums, ns));
 			cb(null, nums, privs);
 		});
 	});
-};
+}
 
 
 /* AUTHORITY */
@@ -1715,7 +1679,7 @@ function Filter(tag) {
 
 util.inherits(Filter, events.EventEmitter);
 exports.Filter = Filter;
-var F = Filter.prototype;
+const F = Filter.prototype;
 
 F.connect = function () {
 	if (!this.r) {
@@ -1725,32 +1689,31 @@ F.connect = function () {
 };
 
 F.get_all = function (limit) {
-	var self = this;
-	var r = this.connect();
-	r.zrange('tag:' + tag_key(this.tag) + ':threads', 0, -1, go);
-	function go(err, threads) {
+	const r = this.connect();
+	const go = (err, threads) => {
 		if (err)
-			return self.failure(err);
-		async.forEach(threads, do_thread, self.check_done.bind(self));
+			return this.failure(err);
+		async.forEach(threads, do_thread, err => this.check_done(err));
 	}
-	function do_thread(op, cb) {
-		var key = 'thread:' + op;
-		r.llen(key + ':posts', function (err, len) {
+	const do_thread = (op, cb) => {
+		const key = 'thread:' + op;
+		r.llen(key + ':posts', (err, len) => {
 			if (err)
 				cb(err);
 			len = parse_number(len);
 			if (len > limit)
 				return cb(null);
-			var thumbKeys = ['thumb', 'realthumb', 'src'];
-			r.hmget(key, thumbKeys, function (err, rs) {
+			const thumbKeys = ['thumb', 'realthumb', 'src'];
+			r.hmget(key, thumbKeys, (err, rs) => {
 				if (err)
 					cb(err);
-				var thumb = rs[0] || rs[1] || rs[2];
-				self.emit('thread', {num: op, thumb: thumb});
+				const thumb = rs[0] || rs[1] || rs[2];
+				this.emit('thread', {num: op, thumb: thumb});
 				cb(null);
 			});
 		});
 	}
+	r.zrange('tag:' + tag_key(this.tag) + ':threads', 0, -1, go);
 };
 
 F.check_done = function (err) {
@@ -1790,67 +1753,60 @@ Y.get_fun = function (op, callback) {
 Y.set_fun_thread = function (op, callback) {
 	if (OPs[op] != op)
 		return callback(Muggle("Thread not found."));
-	var self = this;
-	fs.readFile('client/fun.js', 'UTF-8', function (err, funJs) {
+	fs.readFile('client/fun.js', 'UTF-8', (err, funJs) => {
 		if (err)
 			return callback(err);
 		cache.funThread = op;
-		var m = self.connect().multi();
-		self._log(m, op, common.EXECUTE_JS, [funJs]);
+		const m = this.connect().multi();
+		this._log(m, op, common.EXECUTE_JS, [funJs]);
 		m.exec(callback);
 	});
 };
 
 Y.get_banner = function (cb) {
-	var key = 'tag:' + tag_key(this.tag) + ':banner';
+	const key = 'tag:' + tag_key(this.tag) + ':banner';
 	this.connect().hgetall(key, cb);
 };
 
 Y.set_banner = function (op, message, cb) {
-	var r = this.connect();
+	const r = this.connect();
 
-	var key = 'tag:' + tag_key(this.tag) + ':banner';
-	var self = this;
-	r.hgetall(key, function (err, old) {
+	const key = 'tag:' + tag_key(this.tag) + ':banner';
+	r.hgetall(key, (err, old) => {
 		if (err)
 			return cb(err);
-		var m = r.multi();
+		const m = r.multi();
 		if (old && old.op != op) {
 			// clear previous thread's banner
-			self._log(m, old.op, common.UPDATE_BANNER, [null]);
+			this._log(m, old.op, common.UPDATE_BANNER, [null]);
 		}
 
 		// write new banner
 		m.hmset(key, {op: op, msg: message});
-		self._log(m, op, common.UPDATE_BANNER, [message]);
+		this._log(m, op, common.UPDATE_BANNER, [message]);
 		m.exec(cb);
 	});
 };
 
 Y.teardown = function (board, cb) {
-	var m = this.connect().multi();
-	var filter = new Filter(board);
-	var self = this;
+	const m = this.connect().multi();
+	const filter = new Filter(board);
 	filter.get_all(NaN); // no length limit
-	filter.on('thread', function (thread) {
-		self._log(m, thread.num, common.TEARDOWN, []);
-	});
+	filter.on('thread', thread => this._log(m, thread.num, common.TEARDOWN, []));
 	filter.on('error', cb);
-	filter.on('end', function () {
-		m.exec(cb);
-	});
+	filter.on('end', () => m.exec(cb));
 };
 
 Y.get_current_body = function (num, cb) {
-	var key = (OPs[num] == num ? 'thread:' : 'post:') + num;
-	var m = this.connect().multi();
+	const key = (OPs[num] == num ? 'thread:' : 'post:') + num;
+	const m = this.connect().multi();
 	m.hmget(key, 'hide', 'body');
 	m.get(key + ':body');
-	m.exec(function (err, rs) {
+	m.exec((err, rs) => {
 		if (err)
 			return cb(err);
-		var hide = rs[0][0], finalBody = rs[0][1];
-		var liveBody = rs[1];
+		const hide = rs[0][0], finalBody = rs[0][1];
+		const liveBody = rs[1];
 		if (hide)
 			return cb(null);
 		if (finalBody)
@@ -1869,7 +1825,7 @@ function with_body(r, key, post, callback) {
 	if (post.body !== undefined)
 		callback(null, post);
 	else
-		r.get(key + ':body', function (err, body) {
+		r.get(key + ':body', (err, body) => {
 			if (err)
 				return callback(err);
 			if (body !== null) {
@@ -1878,7 +1834,7 @@ function with_body(r, key, post, callback) {
 				return callback(null, post);
 			}
 			// Race condition between finishing posts
-			r.hget(key, 'body', function (err, body) {
+			r.hget(key, 'body', (err, body) => {
 				if (err)
 					return callback(err);
 				post.body = body || '';
@@ -1900,13 +1856,13 @@ function parse_tags(input) {
 		winston.warn('Blank tag!');
 		return [];
 	}
-	var tags = [];
+	const tags = [];
 	while (input.length) {
-		var m = input.match(/^(\d+):/);
+		const m = input.match(/^(\d+):/);
 		if (!m)
 			break;
-		var len = parse_number(m[1]);
-		var pre = m[1].length + 1;
+		const len = parse_number(m[1]);
+		const pre = m[1].length + 1;
 		if (input.length < pre + len)
 			break;
 		tags.push(input.substr(pre, len));
@@ -1917,11 +1873,11 @@ function parse_tags(input) {
 exports.parse_tags = parse_tags;
 
 function hmget_obj(r, key, keys, cb) {
-	r.hmget(key, keys, function (err, rs) {
+	r.hmget(key, keys, (err, rs) => {
 		if (err)
 			return cb(err);
-		var result = {};
-		for (var i = 0; i < keys.length; i++)
+		const result = {};
+		for (let i = 0; i < keys.length; i++)
 			result[keys[i]] = rs[i];
 		cb(null, result);
 	});
@@ -1935,9 +1891,9 @@ function unbulk(list) {
 		console.warn('bad bulk:', list);
 		throw new Error('bulk of odd len ' + list.length);
 	}
-	var hash = {};
-	for (var i = 0; i < list.length; i += 2) {
-		var key = list[i];
+	const hash = {};
+	for (let i = 0; i < list.length; i += 2) {
+		const key = list[i];
 		if (key in hash)
 			throw new Error('bulk repeated key ' + key);
 		hash[key] = list[i+1];
