@@ -7,7 +7,6 @@ var config = {
 	SERVE_STATIC_FILES: true,
 	SERVE_IMAGES: true,
 	GZIP: false, /* not preferred; use nginx (or other)'s gzipping */
-	USE_WEBSOCKETS: true,
 
 	REDIS_PORT: 6379,
 	READ_ONLY: false,

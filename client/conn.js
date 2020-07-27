@@ -69,10 +69,8 @@ function connect() {
 }
 
 window.new_socket = function (attempt) {
-	var protocols = ['xdr-streaming', 'xhr-streaming', 'iframe-eventsource', 'iframe-htmlfile', 'xdr-polling', 'xhr-polling', 'iframe-xhr-polling', 'jsonp-polling'];
-	if (config.USE_WEBSOCKETS)
-		protocols.unshift('websocket');
-	var url = SOCKET_PATH;
+	const protocols = ['websocket', 'xhr-streaming'];
+	let url = SOCKET_PATH;
 	if (typeof ctoken != 'undefined') {
 		url += '?' + $.param({ctoken: ctoken});
 	}
