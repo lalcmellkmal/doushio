@@ -13,7 +13,8 @@ const _ = require('./lib/underscore'),
     util = require('util'),
     winston = require('winston');
 
-const imager = require('./imager'); /* set up hooks */
+const imager = require('./imager');
+const amusement = require('./server/amusement');
 
 const OPs = exports.OPs = cache.OPs;
 const TAGS = exports.TAGS = cache.opTags;
@@ -560,7 +561,8 @@ Y.insert_post = function (msg, body, extra, callback) {
 		m.incr(tagKey + ':bumpctr');
 	m.sadd('liveposts', key);
 
-	hooks.trigger_sync('inlinePost', {src: msg, dest: view});
+	flatten_post({src: msg, dest: view});
+
 	if (msg.image) {
 		if (op)
 			m.hincrby('thread:' + op, 'imgctr', 1);
@@ -607,7 +609,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 	view.body = body;
 	if (msg.links)
 		view.links = msg.links;
-	extract(view);
+	hydrate_post(view);
 	delete view.ip;
 
 	async.waterfall([
@@ -858,7 +860,7 @@ Y.archive_thread = function (op, callback) {
 		// shallow thread insertion message in archive
 		if (!_.isEmpty(links))
 			view.links = links;
-		extract(view);
+		hydrate_post(view);
 		delete view.ip;
 		view.replyctr = replyCount;
 		view.hctr = 0;
@@ -1639,7 +1641,7 @@ function refine_post(post) {
 	if (post.state)
 		post.editing = true;
 	// extract the image-specific keys (if any) to a sub-hash
-	extract(post);
+	hydrate_post(post);
 }
 
 function parse_number(n) {
@@ -1817,8 +1819,56 @@ Y.get_current_body = function (num, cb) {
 
 /* HELPERS */
 
-function extract(post) {
-	hooks.trigger_sync('extractPost', post);
+/// Hydrate a flat post from redis into the same object but with a nested `image`, etc.
+function hydrate_post(post) {
+	if (has_image(post)) {
+		let image = {};
+		// transplant all image-related keys
+		for (const key of imager.image_attrs) {
+			if (key in post) {
+				image[key] = post[key];
+				delete post[key];
+			}
+		}
+		if (image.dims.split)
+			image.dims = image.dims.split(',').map(parse_number);
+		image.size = parse_number(image.size);
+		// image hash is used for dedup; don't reveal it
+		delete image.hash;
+		post.image = image;
+	}
+
+	if (post.dice) {
+		// comma-delimited dice rolls
+		try {
+			post.dice = JSON.parse('[' + post.dice + ']');
+		}
+		catch (e) {
+			delete post.dice;
+		}
+	}
+}
+
+const has_image = post => !!post && !!(post.src || post.vint);
+
+/// Dehydrate a post, flattening data from `info.src` into `info.dest`.
+function flatten_post(info) {
+	let post = info.dest;
+
+	let image = info.src.image;
+	if (image) {
+		for (const key of imager.image_attrs) {
+			if (key in image)
+				post[key] = image[key];
+		}
+	}
+
+	// copy pasted `inline_dice`
+	let dice = info.src.dice;
+	if (dice && dice.length) {
+		dice = JSON.stringify(dice);
+		post.dice = dice.substring(1, dice.length - 1);
+	}
 }
 
 function with_body(r, key, post, callback) {

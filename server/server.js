@@ -10,6 +10,7 @@ const _ = require('../lib/underscore'),
     check = require('./msgcheck').check,
     common = require('../common'),
     config = require('../config'),
+    curfew = require('../curfew/server'),
     crypto = require('crypto'),
     db = require('../db'),
     fs = require('fs'),
@@ -29,8 +30,6 @@ const _ = require('../lib/underscore'),
 require('../admin');
 if (!imager.is_standalone())
 	require('../imager/daemon'); // preload and confirm it works
-if (config.CURFEW_BOARDS)
-	require('../curfew/server');
 try {
 	var reportConfig = require('../report/config');
 	if (reportConfig.RECAPTCHA_SITE_KEY)
@@ -317,11 +316,12 @@ web.resource(/^\/(\w+)\/live$/, function (req, params, cb) {
 	cb(null, 'redirect', '.');
 });
 
-web.resource(/^\/(\w+)\/$/, function (req, params, cb) {
-	var board = params[1];
-	if (req.ident.suspension)
+web.resource(/^\/(\w+)\/$/, (req, params, cb) => {
+	const board = params[1];
+	const { ident } = req;
+	if (ident.suspension)
 		return cb(null, 'ok'); /* TEMP */
-	if (!caps.can_ever_access_board(req.ident, board))
+	if (!caps.can_ever_access_board(ident, board))
 		return cb(404);
 
 	cb(null, 'ok', {board: board});
@@ -331,18 +331,19 @@ function (req, resp) {
 	if (req.ident.suspension)
 		return render_suspension(req, resp);
 
-	var board = this.board;
-	var info = {board: board, ident: req.ident, resp: resp};
-	hooks.trigger_sync('boardDiversion', info);
-	if (info.diverted)
+	const { board } = this;
+	const { ident } = req;
+	if (!caps.temporal_access_check(ident, board)) {
+		curfew.divert_response(board, resp);
 		return;
+	}
 
-	var yaku = new db.Yakusoku(board, req.ident);
+	const yaku = new db.Yakusoku(board, ident);
 	yaku.get_tag(-1);
-	var paginationHtml;
+	let paginationHtml;
 	yaku.once('begin', function (thread_count) {
-		var nav = page_nav(thread_count, -1, board == 'archive');
-		var initScript = make_init_script(req.ident);
+		const nav = page_nav(thread_count, -1, board == 'archive');
+		const initScript = make_init_script(ident);
 		render.write_board_head(resp, initScript, board, nav);
 		paginationHtml = render.make_pagination_html(nav);
 		resp.write(paginationHtml);
@@ -353,7 +354,7 @@ function (req, resp) {
 	render.write_thread_html(yaku, req, resp, opts);
 	yaku.once('end', function () {
 		resp.write(paginationHtml);
-		render.write_page_end(resp, req.ident, false);
+		render.write_page_end(resp, ident, false);
 		resp.end();
 		yaku.disconnect();
 	});

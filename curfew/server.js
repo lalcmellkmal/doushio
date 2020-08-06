@@ -1,83 +1,73 @@
 var _ = require('../lib/underscore'),
-    caps = require('../server/caps'),
     config = require('../config'),
     db = require('../db'),
-    hooks = require('../hooks'),
     web = require('../server/web'),
     winston = require('winston');
 
 var RES = require('../server/state').resources;
 
-hooks.hook_sync('temporalAccessCheck', function (info) {
-	if (under_curfew(info.ident, info.board))
-		info.access = false;
-});
+exports.divert_response = function (board, resp) {
+	resp.writeHead(200, web.noCacheHeaders);
+	resp.write(RES.curfewTmpl[0]);
+	resp.write('/' + board + '/');
+	resp.write(RES.curfewTmpl[1]);
+	const ending = curfew_ending_time(board);
+	resp.write(ending ? ''+ending.getTime() : 'null');
+	resp.end(RES.curfewTmpl[2]);
+};
 
-hooks.hook_sync('boardDiversion', function (info) {
-	if (info.diverted)
-		return;
-	if (under_curfew(info.ident, info.board)) {
-		info.diverted = true;
-		var resp = info.resp;
-		resp.writeHead(200, web.noCacheHeaders);
-		resp.write(RES.curfewTmpl[0]);
-		resp.write('/' + info.board + '/');
-		resp.write(RES.curfewTmpl[1]);
-		var ending = curfew_ending_time(info.board);
-		resp.write(ending ? ''+ending.getTime() : 'null');
-		resp.end(RES.curfewTmpl[2]);
-	}
-});
-
+// note that admins should always be able to see a curfew board (not checked in here tho)
 function under_curfew(ident, board) {
-	if (caps.can_administrate(ident))
+	const curfew = config.CURFEW_HOURS;
+	const boards = config.CURFEW_BOARDS || [];
+	if (!curfew || !boards.includes(board))
 		return false;
-	var curfew = config.CURFEW_HOURS;
-	if (!curfew || (config.CURFEW_BOARDS || []).indexOf(board) < 0)
-		return false;
-	var hour = new Date().getUTCHours();
+	const hour = new Date().getUTCHours();
 	return curfew.indexOf(hour) < 0;
 }
+exports.under_curfew = under_curfew;
 
 function curfew_ending_time(board) {
-	var curfew = config.CURFEW_HOURS;
-	if (!curfew || (config.CURFEW_BOARDS || []).indexOf(board) < 0)
+	const curfew = config.CURFEW_HOURS;
+	if (!curfew || !(config.CURFEW_BOARDS || []).includes(board))
 		return null;
-	var now = new Date();
-	var tomorrow = day_after(now);
-	var makeToday = hour_date_maker(now);
-	var makeTomorrow = hour_date_maker(tomorrow);
+	const now = new Date();
+	const tomorrow = day_after(now);
+	const makeToday = hour_date_maker(now);
+	const makeTomorrow = hour_date_maker(tomorrow);
 	/* Dumb brute-force algorithm */
-	var candidates = [];
-	config.CURFEW_HOURS.forEach(function (hour) {
+	const candidates = [];
+	for (let hour of config.CURFEW_HOURS) {
 		candidates.push(makeToday(hour), makeTomorrow(hour));
-	});
+	}
 	candidates.sort(compare_dates);
-	for (var i = 0; i < candidates.length; i++)
-		if (candidates[i] > now)
-			return candidates[i];
+	for (let candidate of candidates) {
+		if (candidate > now)
+			return candidate;
+	}
 	return null;
 }
 
 function curfew_starting_time(board) {
-	var curfew = config.CURFEW_HOURS;
-	if (!curfew || (config.CURFEW_BOARDS || []).indexOf(board) < 0)
+	const curfew = config.CURFEW_HOURS;
+	if (!curfew || !(config.CURFEW_BOARDS || []).includes(board))
 		return null;
-	var now = new Date();
-	var tomorrow = day_after(now);
-	var makeToday = hour_date_maker(now);
-	var makeTomorrow = hour_date_maker(tomorrow);
+	const now = new Date();
+	const tomorrow = day_after(now);
+	const makeToday = hour_date_maker(now);
+	const makeTomorrow = hour_date_maker(tomorrow);
 	/* Even dumber brute-force algorithm */
-	var candidates = [];
-	config.CURFEW_HOURS.forEach(function (hour) {
+	const candidates = [];
+	for (let hour of config.CURFEW_HOURS) {
 		hour = (hour + 1) % 24;
-		if (config.CURFEW_HOURS.indexOf(hour) < 0)
+		if (!config.CURFEW_HOURS.includes(hour))
 			candidates.push(makeToday(hour), makeTomorrow(hour));
-	});
+	}
 	candidates.sort(compare_dates);
-	for (var i = 0; i < candidates.length; i++)
-		if (candidates[i] > now)
-			return candidates[i];
+	for (let candidate of candidates) {
+		if (candidate > now)
+			return candidate;
+	}
 	return null;
 };
 
@@ -87,18 +77,16 @@ function compare_dates(a, b) {
 
 function day_after(today) {
 	/* Leap shenanigans? This is probably broken somehow. Yay dates. */
-	var tomorrow = new Date(today.getTime() + 24*3600*1000);
+	let tomorrow = new Date(today.getTime() + 24*3600*1000);
 	if (tomorrow.getUTCDate() == today.getUTCDate())
 		tomorrow = new Date(tomorrow.getTime() + 12*3600*1000);
 	return tomorrow;
 }
 
 function hour_date_maker(date) {
-	var prefix = date.getUTCFullYear() + '/' + (date.getUTCMonth()+1)
+	const prefix = date.getUTCFullYear() + '/' + (date.getUTCMonth()+1)
 			+ '/' + date.getUTCDate() + ' ';
-	return (function (hour) {
-		return new Date(prefix + hour + ':00:00 GMT');
-	});
+	return hour => new Date(prefix + hour + ':00:00 GMT');
 }
 
 /* DAEMON */

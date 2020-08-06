@@ -6,10 +6,6 @@ var config = require('../config'),
     db = require('../db'),
     winston = require('winston');
 
-// Load hooks
-require('../imager');
-require('../server/amusement');
-
 var yaku;
 function connect() {
 	var r;

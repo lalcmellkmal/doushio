@@ -17,8 +17,6 @@ var AUTH_DUMP_DIR = 'authdump';
 
 var DUMP_IDENT = {ip: '127.0.0.1', auth: 'dump'};
 
-require('../server/amusement'); // load dice hook
-
 function Dumper(reader, out) {
 	this.out = out;
 	this.reader = reader;

@@ -51,21 +51,6 @@ hooks.hook('attachToPost', function (attached, cb) {
 	cb(null);
 });
 
-hooks.hook_sync('inlinePost', function (info) {
-	inline_dice(info.dest, info.src.dice);
-});
-
-hooks.hook_sync('extractPost', function (post) {
-	if (!post.dice)
-		return;
-	try {
-		post.dice = JSON.parse('[' + post.dice + ']');
-	}
-	catch (e) {
-		delete post.dice;
-	}
-});
-
 // This is looking rather boilerplatey
 
 hooks.hook('clientSynced', function (info, cb) {

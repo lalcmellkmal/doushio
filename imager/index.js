@@ -41,36 +41,9 @@ exports.send_dead_image = function (kind, filename, resp) {
 	});
 };
 
-hooks.hook_sync('extractPost', function (post) {
-	if (!is_image(post))
-		return;
-	var image = {};
-	image_attrs.forEach(function (key) {
-		if (key in post) {
-			image[key] = post[key];
-			delete post[key];
-		}
-	});
-	if (image.dims.split)
-		image.dims = image.dims.split(',').map(parse_number);
-	image.size = parse_number(image.size);
-	delete image.hash;
-	post.image = image;
-});
-
 function parse_number(n) {
 	return parseInt(n, 10);
 }
-
-hooks.hook_sync('inlinePost', function (info) {
-	var post = info.dest, image = info.src.image;
-	if (!image)
-		return;
-	image_attrs.forEach(function (key) {
-		if (key in image)
-			post[key] = image[key];
-	});
-});
 
 function publish(alloc, cb) {
 	var mvs = [];
@@ -133,10 +106,6 @@ hooks.hook("buryImage", function (info, callback) {
 		etc.movex(media_path(p, nm), dead_path(p, nm), cb);
 	}
 });
-
-function is_image(image) {
-	return image && (image.src || image.vint);
-}
 
 function media_path(dir, filename) {
 	return path.join(config.MEDIA_DIRS[dir], filename);

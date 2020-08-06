@@ -3,6 +3,7 @@ var async = require('async'),
     check = require('./msgcheck').check,
     common = require('../common'),
     config = require('../config'),
+    curfew = require('../curfew/server'),
     db = require('../db'),
     hooks = require('../hooks');
 
@@ -31,10 +32,11 @@ exports.can_access_thread = function (ident, op) {
 	return false;
 };
 
+/// Returns false if the visitor cannot currently access `board` due to curfew.
 function temporal_access_check(ident, board) {
-	var info = {ident: ident, board: board, access: true};
-	hooks.trigger_sync('temporalAccessCheck', info);
-	return info.access;
+	if (can_administrate(ident))
+		return true;
+	return !curfew.under_curfew(ident, board);
 }
 exports.temporal_access_check = temporal_access_check;
 
