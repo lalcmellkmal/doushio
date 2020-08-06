@@ -1,5 +1,4 @@
-var async = require('async'),
-    config = require('./config'),
+const config = require('./config'),
     crypto = require('crypto'),
     etc = require('./etc'),
     fs = require('fs'),
@@ -8,6 +7,8 @@ var async = require('async'),
     stream = require('stream'),
     tmp_file = require('tmp').file,
     util = require('util');
+
+const readFile = util.promisify(fs.readFile);
 
 const PUBLIC_JS = pathJoin('www', 'js');
 
@@ -36,129 +37,104 @@ HashingStream.prototype.end = function (cb) {
 	});
 };
 
-function end_and_move_js(stream, dir, prefix, cb) {
-	stream.end(function () {
-		var fnm;
+function end_and_move_js(stream, dir, prefix) {
+	async function move_js() {
+		let fnm;
 		if (config.DEBUG) {
-			fnm = prefix + '-debug.js';
+			fnm = `${prefix}-debug.js`;
 		}
 		else {
-			var hash = stream._hash.digest('hex').slice(0, 10);
-			fnm = prefix + '-' + hash + '.min.js';
+			const hash = stream._hash.digest('hex').slice(0, 10);
+			fnm = `${prefix}-${hash}.min.js`;
 		}
-		var tmp = stream._tmpFilename;
-		etc.move(tmp, pathJoin(dir, fnm), function (err) {
-			if (err)
-				return cb(err);
-			cb(null, fnm);
-		});
-	});
-};
-
-
-function make_hashing_stream(cb) {
-	// ideally the stream would be returned immediately and handle
-	// this step internally...
-	var opts = {dir: '.build', postfix: '.gen.js', mode: 0644};
-	tmp_file(opts, function (err, tmp, fd) {
-		if (err)
-			return cb(err);
-		var out = fs.createWriteStream(null, {fd: fd});
-		out.once('error', cb);
-
-		if (config.DEBUG) {
-			out._tmpFilename = tmp;
-			cb(null, out);
-		}
-		else {
-			var stream = new HashingStream(out);
-			stream._tmpFilename = tmp;
-			cb(null, stream);
-		}
+		const tmp = stream._tmpFilename;
+		await etc.move(tmp, pathJoin(dir, fnm));
+		return fnm;
+	}
+	return new Promise((resolve, reject) => {
+		stream.end(() => move_js().then(resolve, reject));
 	});
 }
 
-function build_vendor_js(cb) {
-	var deps = require('./deps');
-	make_hashing_stream(function (err, stream) {
-		if (err)
-			return cb(err);
-		async.eachSeries(deps.VENDOR_DEPS, function (file, cb) {
-			fs.readFile(file, function (err, buf) {
-				if (err)
-					return cb(err);
-				stream.write(buf, cb);
+
+function make_hashing_stream() {
+	return new Promise((resolve, reject) => {
+		const opts = {dir: '.build', postfix: '.gen.js', mode: 0644};
+		tmp_file(opts, (err, tmp, fd) => {
+			if (err)
+				return reject(err);
+			const out = fs.createWriteStream(null, {fd: fd});
+			out.once('error', reject);
+
+			if (config.DEBUG) {
+				out._tmpFilename = tmp;
+				resolve(out);
+			}
+			else {
+				const stream = new HashingStream(out);
+				stream._tmpFilename = tmp;
+				resolve(stream);
+			}
+		});
+	});
+}
+
+async function build_vendor_js(deps) {
+	const stream = await make_hashing_stream();
+	const write = util.promisify(stream.write).bind(stream);
+	for (const filename of deps.VENDOR_DEPS) {
+		const buf = await readFile(filename);
+		await write(buf);
+	}
+	return await end_and_move_js(stream, PUBLIC_JS, 'vendor');
+}
+
+async function build_client_js(deps) {
+	const stream = await make_hashing_stream();
+	await make_client(deps.CLIENT_DEPS, stream);
+	return await end_and_move_js(stream, PUBLIC_JS, 'client');
+}
+
+async function build_mod_client_js(deps) {
+	const stream = await make_hashing_stream();
+	await make_client(deps.MOD_CLIENT_DEPS, stream);
+	return await end_and_move_js(stream, 'state', 'mod');
+}
+
+function commit_assets(metadata) {
+	return new Promise((resolve, reject) => {
+		tmp_file({dir: '.build', postfix: '.json'}, (err, tmp, fd) => {
+			if (err)
+				return reject(err);
+			const stream = fs.createWriteStream(null, {fd});
+			stream.once('error', reject);
+			stream.end(JSON.stringify(metadata) + '\n', () => {
+				etc.move(tmp, pathJoin('state', 'scripts.json'))
+					.then(resolve, reject);
 			});
-		}, function (err) {
-			if (err)
-				return cb(err);
-			end_and_move_js(stream, PUBLIC_JS, 'vendor', cb);
 		});
 	});
 }
 
-function build_client_js(cb) {
-	var deps = require('./deps');
-	make_hashing_stream(function (err, stream) {
-		if (err)
-			return cb(err);
-		make_client(deps.CLIENT_DEPS, stream, function (err) {
-			if (err)
-				return cb(err);
-			end_and_move_js(stream, PUBLIC_JS, 'client', cb);
-		});
-	});
-}
-
-function build_mod_client_js(cb) {
-	var deps = require('./deps');
-	make_hashing_stream(function (err, stream) {
-		if (err)
-			return cb(err);
-		make_client(deps.MOD_CLIENT_DEPS, stream, function (err) {
-			if (err)
-				return cb(err);
-			end_and_move_js(stream, 'state', 'mod', cb);
-		});
-	});
-}
-
-function commit_assets(metadata, cb) {
-	tmp_file({dir: '.build', postfix: '.json'}, function (err, tmp, fd) {
-		if (err)
-			return cb(err);
-		var stream = fs.createWriteStream(null, {fd: fd});
-		stream.once('error', cb);
-		stream.end(JSON.stringify(metadata) + '\n', function () {
-			etc.move(tmp, pathJoin('state', 'scripts.json'), cb);
-		});
-	});
-}
-
-function rebuild(cb) {
-	etc.checked_mkdir('state', function (err) {
-	etc.checked_mkdir('.build', function (err) {
-		if (err) return cb(err);
-		async.parallel({
-			vendor: build_vendor_js,
-			client: build_client_js,
-			mod: build_mod_client_js,
-		}, function (err, hashes) {
-			if (err)
-				return cb(err);
-			commit_assets(hashes, cb);
-		});
-	});
-	});
+async function rebuild() {
+	await Promise.all([
+		etc.checked_mkdir('state'),
+		etc.checked_mkdir('.build'),
+	]);
+	const deps = require('./deps');
+	const [vendor, client, mod] = await Promise.all([
+		build_vendor_js(deps),
+		build_client_js(deps),
+		build_mod_client_js(deps),
+	]);
+	await commit_assets({vendor, client, mod});
 }
 exports.rebuild = rebuild;
 
-exports.refresh_deps = function () {
+exports.refresh_deps = () => {
 	delete require.cache[pathJoin(__dirname, 'deps.js')];
 };
 
 if (require.main === module) {
-	rebuild(function (err) {
-		if (err) throw err;
-	});
+	rebuild().catch(err => { console.error(err); process.exit(1); });
 }

@@ -116,27 +116,29 @@ function dead_path(dir, filename) {
 	return path.join(config.MEDIA_DIRS.dead, dir, filename);
 }
 
-function make_dir(base, key, cb) {
-	var dir = base ? path.join(base, key) : config.MEDIA_DIRS[key];
-	etc.checked_mkdir(dir, cb);
+async function make_dir(base, key, cb) {
+	const dir = base ? path.join(base, key) : config.MEDIA_DIRS[key];
+	await etc.checked_mkdir(dir);
 }
 exports._make_media_dir = make_dir;
 
-exports.make_media_dirs = function (cb) {
-	var keys = ['src', 'thumb', 'vint', 'dead'];
+exports.make_media_dirs = async () => {
+	const keys = ['src', 'thumb', 'vint', 'dead'];
 	if (!is_standalone())
 		keys.push('tmp');
 	if (config.EXTRA_MID_THUMBNAILS)
 		keys.push('mid');
-	async.forEach(keys, make_dir.bind(null, null), function (err) {
-		if (err)
-			return cb(err);
-		var dead = config.MEDIA_DIRS.dead;
-		var keys = ['src', 'thumb'];
+
+	await Promise.all(keys.map(key => make_dir(null, key)));
+
+	{
+		const { dead } = config.MEDIA_DIRS;
+		const keys = ['src', 'thumb'];
 		if (config.EXTRA_MID_THUMBNAILS)
 			keys.push('mid');
-		async.forEach(keys, make_dir.bind(null, dead), cb);
-	});
+
+		await Promise.all(keys.map(key => make_dir(dead, key)));
+	}
 }
 
 exports.serve_image = function (req, resp) {

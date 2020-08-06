@@ -187,53 +187,50 @@ function close_stream(stream, cb) {
 	}
 }
 
-function load_state(cb) {
-	async.series([
-		etc.checked_mkdir.bind(null, DUMP_DIR),
-		etc.checked_mkdir.bind(null, AUTH_DUMP_DIR),
-		require('../server/state').reload_hot_resources,
-		db.track_OPs,
-	], cb);
+async function load_state() {
+	await Promise.all([
+		etc.checked_mkdir(DUMP_DIR),
+		etc.checked_mkdir(AUTH_DUMP_DIR),
+	]);
+	await require('../server/state').reload_hot_resources();
+	await db.track_OPs();
 }
 
-if (require.main === module) (function () {
-	var op = parseInt(process.argv[2], 10), board = process.argv[3];
+async function dump() {
+	let op = parseInt(process.argv[2], 10), board = process.argv[3];
 	if (!op) {
 		console.error('Usage: node upkeep/dump.js <thread>');
 		process.exit(-1);
 	}
 
 	console.log('Loading state...');
-	load_state(function (err) {
+	await load_state();
+
+	if (!board)
+		board = db.first_tag_of(op);
+	if (!board) {
+		console.error(op + ' has no tags.');
+		process.exit(-1);
+	}
+
+	console.log('Dumping thread...');
+
+	const base = joinPath(DUMP_DIR, op.toString());
+	const authBase = joinPath(AUTH_DUMP_DIR, op.toString());
+	const outputs = {
+		auth: fs.createWriteStream(authBase + '.json'),
+		json: fs.createWriteStream(base + '.json'),
+		html: fs.createWriteStream(base + '.html'),
+	};
+
+	dump_thread(op, board, DUMP_IDENT, outputs, function (err) {
 		if (err)
 			throw err;
 
-		if (!board)
-			board = db.first_tag_of(op);
-		if (!board) {
-			console.error(op + ' has no tags.');
-			process.exit(-1);
-		}
-
-		console.log('Dumping thread...');
-
-		var base = joinPath(DUMP_DIR, op.toString());
-		var authBase = joinPath(AUTH_DUMP_DIR, op.toString());
-		var outputs = {
-			auth: fs.createWriteStream(authBase + '.json'),
-			json: fs.createWriteStream(base + '.json'),
-			html: fs.createWriteStream(base + '.html'),
-		};
-
-		dump_thread(op, board, DUMP_IDENT, outputs, function (err) {
-			if (err)
-				throw err;
-
-			var streams = [];
-			for (var k in outputs)
-				streams.push(outputs[k]);
-			async.each(streams, close_stream, quit);
-		});
+		const streams = [];
+		for (let k in outputs)
+			streams.push(outputs[k]);
+		async.each(streams, close_stream, quit);
 	});
 
 	function quit() {
@@ -245,4 +242,7 @@ if (require.main === module) (function () {
 				process.exit(0);
 			});
 	}
-})();
+}
+
+if (require.main === module)
+	dump().catch(err => { console.error(err); process.exit(1); });

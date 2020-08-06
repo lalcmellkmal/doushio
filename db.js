@@ -279,14 +279,17 @@ function update_cache(chan, msg) {
 	}
 }
 
-exports.track_OPs = function (callback) {
-	const k = redis_client();
-	k.subscribe('cache');
-	k.once('subscribe', () => {
-		load_OPs(callback);
+exports.track_OPs = () => {
+	return new Promise((resolve, reject) => {
+		const k = redis_client();
+		k.once('error', reject);
+		k.subscribe('cache');
+		k.once('subscribe', () => {
+			load_OPs(resolve);
+		});
+		k.on('message', update_cache);
+		/* k persists for the purpose of cache updates */
 	});
-	k.on('message', update_cache);
-	/* k persists for the purpose of cache updates */
 };
 
 exports.on_pub = function (name, handler) {

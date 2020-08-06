@@ -131,21 +131,22 @@ function make_minified(files, out, cb) {
 	}
 };
 
-exports.make_minified = make_minified;
-
-function make_maybe_minified(files, out, cb) {
-	if (config.DEBUG)
-		make_client(files, out, cb);
-	else
-		make_minified(files, out, cb);
+function make_maybe_minified(files, out) {
+	return new Promise((resolve, reject) => {
+		const cb = err => err ? reject(err) : resolve();
+		if (config.DEBUG)
+			make_client(files, out, cb);
+		else
+			make_minified(files, out, cb);
+	});
 }
 
 exports.make_maybe_minified = make_maybe_minified;
 
 if (require.main === module) {
-	var files = [];
-	for (var i = 2; i < process.argv.length; i++) {
-		var arg = process.argv[i];
+	const files = [];
+	for (let i = 2; i < process.argv.length; i++) {
+		const arg = process.argv[i];
 		if (arg[0] != '-') {
 			files.push(arg);
 			continue;
@@ -156,7 +157,8 @@ if (require.main === module) {
 		}
 	}
 
-	make_maybe_minified(files, process.stdout, function (err) {
-		if (err) throw err;
+	make_maybe_minified(files, process.stdout).catch(err => {
+		console.error(err);
+		process.exit(1);
 	});
 }

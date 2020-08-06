@@ -6,7 +6,10 @@ var _ = require('../lib/underscore'),
     hooks = require('../hooks'),
     path = require('path'),
     pipeline = require('../pipeline'),
+    { promisify } = require('util'),
     vm = require('vm');
+
+const readFile = promisify(fs.readFile);
 
 _.templateSettings = {
 	interpolate: /\{\{(.+?)\}\}/g
@@ -30,27 +33,21 @@ var RES = exports.resources = {};
 exports.clients = {};
 exports.clientsByIP = {};
 
-function reload_hot_config(cb) {
-	fs.readFile('hot.js', 'UTF-8', function (err, js) {
-		if (err)
-			cb(err);
-		var hot = {};
-		try {
-			vm.runInNewContext(js, hot);
-		}
-		catch (e) {
-			return cb(e);
-		}
-		if (!hot || !hot.hot)
-			return cb('Bad hot config.');
+async function reload_hot_config() {
+	const js = await readFile('hot.js', 'UTF-8');
+	let hot = {};
+	vm.runInNewContext(js, hot);
+	if (!hot || !hot.hot)
+		return reject('Bad hot config.');
 
-		// Overwrite the original object just in case
-		Object.keys(HOT).forEach(function (k) {
-			delete HOT[k];
-		});
-		_.extend(HOT, hot.hot);
-		read_exits('exits.txt', function () {
-			hooks.trigger('reloadHot', HOT, cb);
+	// Overwrite the original object just in case
+	for (let k of Object.keys(HOT)) {
+		delete HOT[k];
+	}
+	_.extend(HOT, hot.hot);
+	await new Promise((resolve, reject) => {
+		hooks.trigger('reloadHot', HOT, err => {
+			err ? reject(err) : resolve()
 		});
 	});
 }
@@ -81,45 +78,34 @@ hooks.hook('reloadHot', function (hot, cb) {
 	});
 });
 
-function reload_scripts(cb) {
-	var json = path.join('state', 'scripts.json');
-	fs.readFile(json, 'UTF-8', function (err, json) {
-		if (err)
-			cb(err);
-		var js;
-		try {
-			js = JSON.parse(json);
-		}
-		catch (e) {
-			return cb(e);
-		}
-		if (!js || !js.vendor || !js.client)
-			return cb('Bad state/scripts.json.');
+async function reload_scripts() {
+	const filename = path.join('state', 'scripts.json');
+	const json = await readFile(filename, 'UTF-8');
+	const js = JSON.parse(json);
+	if (!js || !js.vendor || !js.client)
+		throw new Error('Bad state/scripts.json.');
 
-		HOT.VENDOR_JS = js.vendor;
-		HOT.CLIENT_JS = js.client;
+	HOT.VENDOR_JS = js.vendor;
+	HOT.CLIENT_JS = js.client;
 
-		var modJs = path.join('state', js.mod);
-		fs.readFile(modJs, 'UTF-8', function (err, modSrc) {
-			if (err)
-				return cb(err);
-			RES.modJs = modSrc;
-			cb(null);
-		});
-	});
+	const modFilename = path.join('state', js.mod);
+	const modSrc = await readFile(modFilename, 'UTF-8');
+	RES.modJs = modSrc;
 }
 
-function reload_resources(cb) {
+function reload_resources() {
+	return new Promise((resolve, reject) => {
 
-	var deps = require('../deps');
+		const deps = require('../deps');
 
-	read_templates(function (err, tmpls) {
-		if (err)
-			return cb(err);
-
-		_.extend(RES, expand_templates(tmpls));
-
-		hooks.trigger('reloadResources', RES, cb);
+		read_templates((err, tmpls) => {
+			if (err)
+				return reject(err);
+			_.extend(RES, expand_templates(tmpls));
+			hooks.trigger('reloadResources', RES, err => {
+				err ? reject(err) : resolve()
+			});
+		});
 	});
 }
 
@@ -166,15 +152,12 @@ function expand_templates(res) {
 	return ex;
 }
 
-exports.reload_hot_resources = function (cb) {
+exports.reload_hot_resources = async function () {
 	pipeline.refresh_deps();
-
-	async.series([
-		reload_hot_config,
-		pipeline.rebuild,
-		reload_scripts,
-		reload_resources,
-	], cb);
+	await reload_hot_config();
+	await pipeline.rebuild();
+	await reload_scripts();
+	await reload_resources();
 }
 
 function make_navigation_html() {
@@ -190,21 +173,4 @@ function make_navigation_html() {
 	});
 	bits.push(']</nav>');
 	return bits.join('');
-}
-
-function read_exits(file, cb) {
-	fs.readFile(file, 'UTF-8', function (err, lines) {
-		if (err)
-			return cb(err);
-		var exits = [], dest = HOT.BANS;
-		lines.split(/\n/g).forEach(function (line) {
-			var m = line.match(/^(?:^#\d)*(\d+\.\d+\.\d+\.\d+)/);
-			if (!m)
-				return;
-			var exit = m[1];
-			if (dest.indexOf(exit) < 0)
-				dest.push(exit);
-		});
-		cb(null);
-	});
 }

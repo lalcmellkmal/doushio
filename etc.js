@@ -35,14 +35,14 @@ Muggle.prototype.deepest_reason = function () {
 	return this;
 };
 
-exports.move = function (src, dest, callback) {
-	child_process.execFile('/bin/mv', ['--', src, dest],
-				function (err, stdout, stderr) {
-		if (err)
-			callback(Muggle("Couldn't move file into place.",
-					stderr || err));
-		else
-			callback(null);
+exports.move = function (src, dest) {
+	return new Promise((resolve, reject) => {
+		child_process.execFile('/bin/mv', ['--', src, dest], (err, stdout, stderr) => {
+			if (err)
+				reject(Muggle("Couldn't move file into place.", stderr || err));
+			else
+				resolve();
+		});
 	});
 };
 
@@ -78,9 +78,14 @@ exports.cpx = function (src, dest, callback) {
 	});
 };
 
-exports.checked_mkdir = function (dir, cb) {
-	fs.mkdir(dir, function (err) {
-		cb(err && err.code == 'EEXIST' ? null : err);
+exports.checked_mkdir = dir => {
+	return new Promise((resolve, reject) => {
+		fs.mkdir(dir, err => {
+			if (err && err.code != 'EEXIST')
+				reject(err);
+			else
+				resolve();
+		});
 	});
 };
 

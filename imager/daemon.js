@@ -796,20 +796,24 @@ IU.record_image = function (tmps) {
 	});
 };
 
-function run_daemon() {
-	var cd = config.DAEMON;
-	var is_unix_socket = (typeof cd.LISTEN_PORT == 'string');
+async function run_daemon() {
+	const cd = config.DAEMON;
+	const is_unix_socket = (typeof cd.LISTEN_PORT == 'string');
 	if (is_unix_socket) {
 		try { fs.unlinkSync(cd.LISTEN_PORT); } catch (e) {}
 	}
 
-	var server = require('http').createServer(new_upload);
+	const server = require('http').createServer(new_upload);
 	server.listen(cd.LISTEN_PORT);
 	if (is_unix_socket) {
 		fs.chmodSync(cd.LISTEN_PORT, '777'); // TEMP
 	}
 
-	index._make_media_dir(null, 'tmp', function (err) {});
+	try {
+		await index._make_media_dir(null, 'tmp');
+	} catch (e) {
+		winston.warn(e);
+	}
 
 	winston.info('Imager daemon listening on '
 			+ (cd.LISTEN_HOST || '')
@@ -822,10 +826,12 @@ if (require.main == module) (function () {
 		throw new Error("Please enable DAEMON in imager/config.js");
 
 	var onegai = new imagerDb.Onegai;
-	onegai.delete_temporaries(function (err) {
+	onegai.delete_temporaries((err) => {
 		onegai.disconnect();
 		if (err)
 			throw err;
-		process.nextTick(run_daemon);
+		process.nextTick(() => {
+			run_daemon().catch(err => { winston.error(err); process.exit(1); });
+		});
 	});
 })();

@@ -158,12 +158,14 @@ function synchronize(msg, client) {
 	return true;
 }
 
-function setup_imager_relay(cb) {
-	var onegai = new imager.Onegai;
-	onegai.relay_client_messages();
-	onegai.once('relaying', function () {
-		onegai.on('message', image_status);
-		cb(null);
+function setup_imager_relay() {
+	return new Promise((resolve, reject) => {
+		const onegai = new imager.Onegai;
+		onegai.relay_client_messages();
+		onegai.once('relaying', () => {
+			onegai.on('message', image_status);
+			resolve();
+		});
 	});
 }
 
@@ -1181,16 +1183,17 @@ function start_server() {
 			+ (config.LISTEN_PORT + '.'));
 }
 
-function hot_reloader() {
-	STATE.reload_hot_resources(function (err) {
-		if (err) {
-			winston.error("Error trying to reload:");
-			winston.error(err);
-			return;
-		}
-		okyaku.scan_client_caps();
-		winston.info('Reloaded initial state.');
-	});
+async function hot_reloader() {
+	try {
+		await STATE.reload_hot_resources();
+	}
+	catch (err) {
+		winston.error("Error trying to reload:");
+		winston.error(err);
+		return;
+	}
+	okyaku.scan_client_caps();
+	winston.info('Reloaded initial state.');
 }
 
 function non_daemon_pid_setup() {
@@ -1212,37 +1215,36 @@ function non_daemon_pid_setup() {
 	}
 }
 
-if (require.main == module) {
+async function main() {
 	if (!process.getuid())
 		throw new Error("Refusing to run as root.");
 	tripcode.setSalt(config.SECURE_SALT);
-	async.series([
-		imager.make_media_dirs,
-		setup_imager_relay,
-		STATE.reload_hot_resources,
-		db.track_OPs,
-	], function (err) {
+
+	await imager.make_media_dirs();
+	await setup_imager_relay();
+	await STATE.reload_hot_resources();
+	await db.track_OPs();
+
+	const yaku = new db.Yakusoku(null, db.UPKEEP_IDENT);
+	let onegai;
+	const writes = [];
+	if (!config.READ_ONLY) {
+		writes.push(yaku.finish_all.bind(yaku));
+		if (!imager.is_standalone()) {
+			onegai = new imager.Onegai;
+			writes.push(onegai.delete_temporaries.bind(
+					onegai));
+		}
+	}
+	async.series(writes, function (err) {
 		if (err)
 			throw err;
-
-		var yaku = new db.Yakusoku(null, db.UPKEEP_IDENT);
-		var onegai;
-		var writes = [];
-		if (!config.READ_ONLY) {
-			writes.push(yaku.finish_all.bind(yaku));
-			if (!imager.is_standalone()) {
-				onegai = new imager.Onegai;
-				writes.push(onegai.delete_temporaries.bind(
-						onegai));
-			}
-		}
-		async.series(writes, function (err) {
-			if (err)
-				throw err;
-			yaku.disconnect();
-			if (onegai)
-				onegai.disconnect();
-			process.nextTick(start_server);
-		});
+		yaku.disconnect();
+		if (onegai)
+			onegai.disconnect();
+		process.nextTick(start_server);
 	});
 }
+
+if (require.main === module)
+	main().catch(err => { winston.error(err); process.exit(1); });
