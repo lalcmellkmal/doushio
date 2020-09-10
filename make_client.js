@@ -1,4 +1,4 @@
-var async = require('async'),
+const async = require('async'),
     child_process = require('child_process'),
     config = require('./config'),
     fs = require('fs'),
@@ -9,70 +9,75 @@ var async = require('async'),
 
 function make_client(inputs, out, cb) {
 
-var defines = {};
-for (var k in config)
-	defines[k] = JSON.stringify(config[k]);
-for (var k in imagerConfig)
-	defines[k] = JSON.stringify(imagerConfig[k]);
-for (var k in reportConfig)
-	defines[k] = JSON.stringify(reportConfig[k]);
+	// flatten all the config entries.
+	// YIKES: no namespacing
+	const defines = new Map();
+	for (let k in config)
+		defines.set(k, JSON.stringify(config[k]));
+	for (let k in imagerConfig)
+		defines.set(k, JSON.stringify(imagerConfig[k]));
+	for (let k in reportConfig)
+		defines.set(k, JSON.stringify(reportConfig[k]));
 
-// UGH
-var configDictLookup = {
-	config: config,
-	imagerConfig: imagerConfig,
-	reportConfig: reportConfig,
-};
+	// UGH
+	const configDictLookup = {
+		config,
+		imagerConfig,
+		reportConfig,
+	};
 
-function lookup_config(dictName, key) {
-	var dict = configDictLookup[dictName];
-	if (key.indexOf('SECURE') >= 0 || key.indexOf('PRIVATE') >= 0)
-		throw new Error("Refusing " + key + " in client code!");
-	return dict[key];
-}
+	function lookup_config(dictName, key) {
+		const dict = configDictLookup[dictName];
+		if (/(SECRET|SECURE|PRIVATE)/.test(key)) {
+			throw new Error(`Refusing ${key} in client code!`);
+		}
+		return dict[key];
+	}
 
-var config_re = /\b(\w+onfig)\.(\w+)\b/;
+	const config_re = /\b((?:c|imagerC|reportC)onfig)\.(\w+)\b/;
 
+// INNER CONVERT FUNCTION
 function convert(file, cb) {
 	if (/^lib\//.test(file))
 		return cb("lib/* should be in VENDOR_DEPS");
 	if (/^config\.js/.test(file))
 		return cb("config.js shouldn't be in client");
 
-fs.readFile(file, 'UTF-8', function (err, fullFile) {
+fs.readFile(file, 'UTF-8', (err, fullFile) => {
 	if (err)
 		return cb(err);
 
-	var lines = fullFile.split('\n');
-	var waitForDrain = false;
-	for (var j = 0; j < lines.length; j++) {
-		var line = lines[j];
-		if (/^var\s+DEFINES\s*=\s*exports\s*;\s*$/.test(line))
+	const lines = fullFile.split('\n');
+	let waitForDrain = false;
+	for (let line of lines) {
+		// skip the defines-setup in common.js (and admin/common.js)
+		if (/^const\s+DEFINES\s*=\s*exports\s*;\s*$/.test(line))
 			continue;
-		if (/^var\s+(\w+onfig|common|_)\s*=\s*require.*$/.test(line))
+		// config/common/underscore imports are implicit
+		if (/^(var|let|const)\s+(\w+onfig|common|_)\s*=\s*require.*$/.test(line))
 			continue;
-		m = line.match(/^DEFINES\.(\w+)\s*=\s*(.+);$/);
+		// collect definitions
+		let m = line.match(/^DEFINES\.(\w+)\s*=\s*(.+);$/);
 		if (m) {
-			defines[m[1]] = m[2];
+			defines.set(m[1], m[2]);
 			continue;
 		}
+		// turn common.js exports into global definitions
 		m = line.match(/^exports\.(\w+)\s*=\s*(\w+)\s*;\s*$/);
 		if (m && m[1] == m[2])
-			continue;
+			continue; // skip lines like `exports.foo = foo;`
 		m = line.match(/^exports\.(\w+)\s*=\s*(.*)$/);
 		if (m)
-			line = 'var ' + m[1] + ' = ' + m[2];
+			line = `const ${m[1]} = ${m[2]}`;
 
-		// XXX: risky
-		line = line.replace(/\bcommon\.\b/g, '');
-
+		// inline all the config values for this line
 		while (true) {
-			var m = line.match(config_re);
+			let m = line.match(config_re);
 			if (!m)
 				break;
-			var cfg = lookup_config(m[1], m[2]);
+			let cfg = lookup_config(m[1], m[2]);
 			if (cfg === undefined) {
-				return cb("No such "+m[1]+" var "+m[2]);
+				return cb(`No such ${m[1]} var '${m[2]}'`);
 			}
 			// Bleh
 			if (cfg instanceof RegExp)
@@ -81,26 +86,28 @@ fs.readFile(file, 'UTF-8', function (err, fullFile) {
 				cfg = JSON.stringify(cfg);
 			line = line.replace(config_re, cfg);
 		}
-		for (var src in defines) {
+		// try applying each define to this line
+		for (let [src, dest] of defines.entries()) {
 			if (line.indexOf(src) < 0)
 				continue;
-			var regexp = new RegExp('(?:DEFINES\.)?\\b' + src
-					+ '\\b', 'g');
-			line = line.replace(regexp, defines[src]);
+			let regexp = new RegExp('(?:DEFINES\.)?\\b' + src + '\\b', 'g');
+			line = line.replace(regexp, dest);
 		}
+		// finally, write it out
 		waitForDrain = !out.write(line+'\n', 'UTF-8');
 	}
 	if (waitForDrain)
-		out.once('drain', function () { cb(null); });
+		out.once('drain', () => cb(null));
 	else
 		cb(null);
 
 }); // readFile
-}
+} // function convert
 
 	// kick off
 	async.eachSeries(inputs, convert, cb);
-};
+
+}; // function make_client
 
 exports.make_client = make_client;
 
@@ -110,15 +117,15 @@ function make_minified(files, out, cb) {
 	make_client(files, buf, function (err) {
 		if (err)
 			return cb(err);
-		var src = buf.getContentsAsString('utf-8');
+		const src = buf.getContentsAsString('utf-8');
 		if (!src || !src.length)
 			return cb('make_minified: no client JS was generated');
 		minify(src);
 	});
 
 	function minify(src) {
-		var UglifyJS = require('uglify-es');
-		var ugly;
+		const UglifyJS = require('uglify-es');
+		let ugly;
 		try {
 			ugly = UglifyJS.minify(src, {
 				mangle: false,

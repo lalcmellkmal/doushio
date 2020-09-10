@@ -1,11 +1,15 @@
 var _ = require('../lib/underscore');
 var config = require('../config');
-var common = require('../common');
 
-var DEFINES = exports;
+const DEFINES = exports;
 DEFINES.FETCH_ADDRESS = 101;
 DEFINES.SET_ADDRESS_NAME = 102;
 DEFINES.BAN = 103;
+
+// can't import this from common because make_client is dumb
+function safe(frag) {
+	return {safe: frag};
+}
 
 var modCache = {}; // TEMP
 exports.modCache = modCache;
@@ -112,7 +116,7 @@ function append_mnemonic(info) {
 			mnemonic += ' "' + addr.name + '"';
 	}
 
-	var s = common.safe;
+	const s = safe;
 	var title = mnemonic ? [s(' title="'), ip, s('"')] : '';
 	header.push(s(' <a class="mod addr"'), title, s('>'),
 			mnemonic || ip, s('</a>'));
@@ -120,8 +124,7 @@ function append_mnemonic(info) {
 
 function denote_hidden(info) {
 	if (info.data.hide)
-		info.header.push(common.safe(
-				' <em class="mod hidden">(hidden)</em>'));
+		info.header.push(safe(' <em class="mod hidden">(hidden)</em>'));
 }
 exports.denote_hidden = denote_hidden;
 

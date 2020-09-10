@@ -1,6 +1,6 @@
 var config = require('./config');
 var imagerConfig = require('./imager/config');
-var DEFINES = exports;
+const DEFINES = exports;
 DEFINES.INVALID = 0;
 
 DEFINES.INSERT_POST = 2;
