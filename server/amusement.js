@@ -51,33 +51,19 @@ hooks.hook('attachToPost', function (attached, cb) {
 	cb(null);
 });
 
-// This is looking rather boilerplatey
-
-hooks.hook('clientSynced', function (info, cb) {
-	var op = info.op, client = info.client;
-	if (op) {
-		client.db.get_fun(op, function (err, js) {
-			if (err)
-				return cb(err);
-			if (js)
-				client.send([op, common.EXECUTE_JS, js]);
-			cb(null);
-		});
-	}
-	else
-		cb(null);
-});
-
-hooks.hook('clientSynced', function (info, cb) {
-	var client = info.client;
-	client.db.get_banner(function (err, banner) {
+exports.notify_client_fun_banner = function (client, op) {
+	client.db.get_fun(op, (err, js) => {
 		if (err)
-			return cb(err);
-		if (!banner)
-			return cb(null);
-		var msg = banner.message;
-		if (msg)
-			client.send([banner.op, common.UPDATE_BANNER, msg]);
-		cb(null);
+			return winston.error(err);
+		if (js)
+			client.send([op, common.EXECUTE_JS, js]);
 	});
-});
+
+	client.db.get_banner((err, banner) => {
+		if (err)
+			return winston.error(err);
+		if (banner && banner.op == op && banner.message) {
+			client.send([op, common.UPDATE_BANNER, banner.message]);
+		}
+	});
+};

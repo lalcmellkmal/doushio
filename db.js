@@ -1773,6 +1773,7 @@ Y.get_banner = function (cb) {
 	this.connect().hgetall(key, cb);
 };
 
+// DEAD CODE
 Y.set_banner = function (op, message, cb) {
 	const r = this.connect();
 

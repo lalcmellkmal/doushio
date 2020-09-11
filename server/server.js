@@ -135,25 +135,20 @@ function synchronize(msg, client) {
 		}
 
 		if (client.ident.readOnly) {
-			logs.push('0,' + common.MODEL_SET + ',["hot"],{"readOnly":true}');
+			logs.push(`0,${common.MODEL_SET},["hot"],{"readOnly":true}`);
 		}
 
-		var sync = '0,' + common.SYNCHRONIZE;
+		let sync = '0,' + common.SYNCHRONIZE;
 		if (dead_threads.length)
 			sync += ',' + JSON.stringify(dead_threads);
 		logs.push(sync);
-		client.socket.write('[[' + logs.join('],[') + ']]');
+		client.socket.write(`[[${logs.join('],[')}]]`);
 		client.synced = true;
 
-		var info = {client: client, live: live};
-		if (!live && count == 1)
-			info.op = op;
-		else
-			info.board = board;
-		hooks.trigger('clientSynced', info, function (err) {
-			if (err)
-				winston.error(err);
-		});
+		const isSingleThread = !live && count == 1;
+		if (isSingleThread) {
+			amusement.notify_client_fun_banner(client, op);
+		}
 	}
 	return true;
 }
