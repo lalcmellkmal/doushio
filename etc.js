@@ -3,6 +3,8 @@ var child_process = require('child_process'),
     util = require('util'),
     winston = require('winston');
 
+exports.readFile = util.promisify(fs.readFile);
+
 /* Non-wizard-friendly error message */
 function Muggle(message, reason) {
 	if (!(this instanceof Muggle))

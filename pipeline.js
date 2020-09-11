@@ -8,8 +8,6 @@ const config = require('./config'),
     tmp_file = require('tmp').file,
     util = require('util');
 
-const readFile = util.promisify(fs.readFile);
-
 const PUBLIC_JS = pathJoin('www', 'js');
 
 function HashingStream(out) {
@@ -83,7 +81,7 @@ async function build_vendor_js(deps) {
 	const stream = await make_hashing_stream();
 	const write = util.promisify(stream.write).bind(stream);
 	for (const filename of deps.VENDOR_DEPS) {
-		const buf = await readFile(filename);
+		const buf = await etc.readFile(filename);
 		await write(buf);
 	}
 	return await end_and_move_js(stream, PUBLIC_JS, 'vendor');

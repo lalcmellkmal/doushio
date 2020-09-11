@@ -1,13 +1,13 @@
-const async = require('async'),
-    child_process = require('child_process'),
-    config = require('./config'),
+const child_process = require('child_process'),
+	config = require('./config'),
+	etc = require('./etc'),
     fs = require('fs'),
     imagerConfig = require('./imager/config'),
     reportConfig = require('./report/config'),
     streamBuffers = require('stream-buffers'),
     util = require('util');
 
-function make_client(inputs, out, cb) {
+async function make_client(inputs, out) {
 
 	// flatten all the config entries.
 	// YIKES: no namespacing
@@ -36,16 +36,15 @@ function make_client(inputs, out, cb) {
 
 	const config_re = /\b((?:c|imagerC|reportC)onfig)\.(\w+)\b/;
 
-// INNER CONVERT FUNCTION
-function convert(file, cb) {
-	if (/^lib\//.test(file))
-		return cb("lib/* should be in VENDOR_DEPS");
-	if (/^config\.js/.test(file))
-		return cb("config.js shouldn't be in client");
+// INNER CONVERT LOOP
+for (const file of inputs) {
 
-fs.readFile(file, 'UTF-8', (err, fullFile) => {
-	if (err)
-		return cb(err);
+	if (/^lib\//.test(file))
+		throw new Error("lib/* should be in VENDOR_DEPS");
+	if (/^config\.js/.test(file))
+		throw new Error("config.js shouldn't be in client");
+
+	const fullFile = await etc.readFile(file, 'UTF-8');
 
 	const lines = fullFile.split('\n');
 	let waitForDrain = false;
@@ -96,56 +95,32 @@ fs.readFile(file, 'UTF-8', (err, fullFile) => {
 		// finally, write it out
 		waitForDrain = !out.write(line+'\n', 'UTF-8');
 	}
-	if (waitForDrain)
-		out.once('drain', () => cb(null));
-	else
-		cb(null);
-
-}); // readFile
-} // function convert
-
-	// kick off
-	async.eachSeries(inputs, convert, cb);
-
-}; // function make_client
-
-exports.make_client = make_client;
-
-function make_minified(files, out, cb) {
-	var buf = new streamBuffers.WritableStreamBuffer();
-	buf.once('error', cb);
-	make_client(files, buf, function (err) {
-		if (err)
-			return cb(err);
-		const src = buf.getContentsAsString('utf-8');
-		if (!src || !src.length)
-			return cb('make_minified: no client JS was generated');
-		minify(src);
-	});
-
-	function minify(src) {
-		const UglifyJS = require('uglify-es');
-		let ugly;
-		try {
-			ugly = UglifyJS.minify(src, {
-				mangle: false,
-			});
-		}
-		catch (e) {
-			return cb(e);
-		}
-		out.write(ugly.code, cb);
+	if (waitForDrain) {
+		await new Promise(resolve => {
+			// error handling??
+			out.once('drain', resolve);
+		});
 	}
-};
+}
+// END CONVERT LOOP
+}
 
-function make_maybe_minified(files, out) {
-	return new Promise((resolve, reject) => {
-		const cb = err => err ? reject(err) : resolve();
-		if (config.DEBUG)
-			make_client(files, out, cb);
-		else
-			make_minified(files, out, cb);
+async function make_minified(files, out) {
+	const buf = new streamBuffers.WritableStreamBuffer();
+	buf.once('error', err => { throw err; });
+	await make_client(files, buf);
+	const src = buf.getContentsAsString('utf-8');
+	if (!src || !src.length)
+		throw new Error('make_minified: no client JS was generated');
+	const UglifyJS = require('uglify-es');
+	let ugly = UglifyJS.minify(src, {mangle: false});
+	await new Promise((resolve, reject) => {
+		out.write(ugly.code, err => (err ? reject(err) : resolve()));
 	});
+}
+
+function make_maybe_minified(files, out) { // returns a promise
+	return config.DEBUG ? make_client(files, out) : make_minified(files, out);
 }
 
 exports.make_maybe_minified = make_maybe_minified;
