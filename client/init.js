@@ -4,7 +4,6 @@ var $DOC = $(document);
 var $name = $('#xD'), $email = $('#pogchamp');
 var $ceiling = $('hr:first');
 
-DEFINES.PAGE_BOTTOM = -1;
 var menuOptions = ['Focus'];
 var menuHandlers = {};
 

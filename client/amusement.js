@@ -16,7 +16,7 @@ function queue_roll(bit) {
 }
 
 oneeSama.hook('imouto', function (imouto) {
-	imouto.dice = GAME_BOARDS.indexOf(BOARD) >= 0;
+	imouto.dice = config.GAME_BOARDS.indexOf(BOARD) >= 0;
 	imouto.queueRoll = queue_roll;
 	imouto.allRolls = {sent: 0, seen: 0};
 });

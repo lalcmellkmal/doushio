@@ -13,17 +13,17 @@ window.send = function (msg) {
 	}
 
 	msg = JSON.stringify(msg);
-	if (DEBUG)
+	if (config.DEBUG)
 		console.log('<', msg);
 	socket.send(msg);
 };
 
-var pong = '[[0,' + PING + ']]';
+const pong = '[[0,' + PING + ']]';
 
 function on_message(e) {
 	if (e == pong)
 		return;
-	if (DEBUG)
+	if (config.DEBUG)
 		console.log('>', e.data);
 	var msgs = JSON.parse(e.data);
 
@@ -64,13 +64,13 @@ function connect() {
 	socket.onopen = connSM.feeder('open');
 	socket.onclose = connSM.feeder('close');
 	socket.onmessage = on_message;
-	if (DEBUG)
+	if (config.DEBUG)
 		window.socket = socket;
 }
 
 window.new_socket = function (attempt) {
 	const protocols = ['websocket', 'xhr-streaming'];
-	let url = SOCKET_PATH;
+	let url = config.SOCKET_PATH;
 	if (typeof ctoken != 'undefined') {
 		url += '?' + $.param({ctoken: ctoken});
 	}
@@ -109,7 +109,7 @@ connSM.act('* + close -> dropped', function (e) {
 		socket.onclose = null;
 		socket.onmessage = null;
 	}
-	if (DEBUG)
+	if (config.DEBUG)
 		console.error('E:', e);
 	if (attemptTimer) {
 		clearTimeout(attemptTimer);
@@ -148,7 +148,7 @@ connSM.act('* + invalid, desynced + close -> desynced', function (msg) {
 	socket.onmessage = null;
 	socket.close();
 	socket = null;
-	if (DEBUG)
+	if (config.DEBUG)
 		window.socket = null;
 });
 

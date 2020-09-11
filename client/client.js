@@ -93,7 +93,7 @@ function shift_replies(section) {
 		section.children('blockquote,form').last().after($stat);
 	}
 	var omitsBefore = omit;
-	for (var i = 0; i < shown.length; i++) {
+	for (let i = 0; i < shown.length; i++) {
 		var cull = $(shown[i]);
 		if (rem-- < ABBREVIATED_REPLIES)
 			break;
@@ -103,7 +103,8 @@ function shift_replies(section) {
 		cull.remove();
 	}
 	$stat.text(abbrev_msg(omit, img));
-	if (omitsBefore <= THREAD_LAST_N && omit > THREAD_LAST_N) {
+	const last_n = config.THREAD_LAST_N;
+	if (omitsBefore <= last_n && omit > last_n) {
 		var $expand = section.find('header .act');
 		if ($expand.length == 1) {
 			var num = extract_num(section);
@@ -118,7 +119,7 @@ function spill_page() {
 		return;
 	/* Ugh, this could be smarter. */
 	var ss = $('body > section[id]:visible');
-	for (var i = THREADS_PER_PAGE; i < ss.length; i++)
+	for (let i = config.THREADS_PER_PAGE; i < ss.length; i++)
 		$(ss[i]).prev('hr').andSelf().hide();
 
 }
