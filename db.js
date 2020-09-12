@@ -26,7 +26,17 @@ function register_lua(name) {
 }
 
 function redis_client() {
-	const conn = require('redis').createClient(config.REDIS_PORT || undefined);
+	const redis = require('redis');
+	const { RedisClient } = redis;
+	const conn = redis.createClient(config.REDIS_PORT || undefined);
+
+	// provide `r.promise.*` async methods
+	conn.promise = Object.entries(RedisClient.prototype)
+		.filter(([_, f]) => typeof f === 'function' && f.name.toLowerCase() === f.name)
+		.reduce((acc, [name, method]) => ({
+			...acc,
+			[name]: util.promisify(method).bind(conn)
+		}), {});
 
 	// ASYNC SETUP RACE!
 	const load = entry => {
