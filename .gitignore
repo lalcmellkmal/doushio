@@ -22,6 +22,7 @@ voice/*.mp3
 www/archive
 www/js/client*.js
 www/js/vendor*.js
+www/kana
 www/src
 www/thumb
 www/mid
