@@ -1,10 +1,8 @@
-var async = require('async'),
-    config = require('./config'),
+const config = require('./config'),
     child_process = require('child_process'),
     db = require('./db'),
     etc = require('../etc'),
     fs = require('fs'),
-    hooks = require('../hooks'),
     path = require('path'),
     winston = require('winston');
 
@@ -46,26 +44,29 @@ function parse_number(n) {
 }
 
 function publish(alloc, cb) {
-	var mvs = [];
-	var haveComp = alloc.tmps.comp && alloc.image.realthumb;
-	for (var kind in alloc.tmps) {
-		var src = media_path('tmp', alloc.tmps[kind]);
+	const copies = [];
+	const haveComp = alloc.tmps.comp && alloc.image.realthumb;
+	for (let kind in alloc.tmps) {
+		const src = media_path('tmp', alloc.tmps[kind]);
 
 		// both comp and thumb go in thumb/
-		var destDir = (kind == 'comp') ? 'thumb' : kind;
+		const destDir = (kind == 'comp') ? 'thumb' : kind;
 		// hack for stupid thumb/realthumb business
-		var destKey = kind;
+		let destKey = kind;
 		if (haveComp) {
 			if (kind == 'thumb')
 				destKey = 'realthumb';
 			else if (kind == 'comp')
 				destKey = 'thumb';
 		}
-		var dest = media_path(destDir, alloc.image[destKey]);
 
-		mvs.push(etc.cpx.bind(etc, src, dest));
+		const dest = media_path(destDir, alloc.image[destKey]);
+		copies.push(etc.copy(src, dest));
 	}
-	async.parallel(mvs, cb);
+	Promise.all(copies).then(
+		() => cb(null),
+		err => cb(err || etc.Muggle('Publish error'))
+	);
 }
 
 function validate_alloc(alloc) {
@@ -82,30 +83,32 @@ function validate_alloc(alloc) {
 	return true;
 }
 
-
-hooks.hook("buryImage", function (info, callback) {
-	if (!info.src)
-		return callback(null);
-	/* Just in case */
-	var m = /^\d+\w*\.\w+$/;
-	if (!info.src.match(m))
-		return callback(etc.Muggle('Invalid image.'));
-	var mvs = [mv.bind(null, 'src', info.src)];
+/// Move the image (and its thumbnails) to the graveyard folder.
+exports.bury_image = async (info) => {
+	const { src } = info;
+	if (!src)
+		return;
+	// sanity check the filename
+	const m = /^\d+\w*\.\w+$/;
+	if (!src.match(m))
+		throw etc.Muggle('Invalid image filename to delete.');
+	const moves = [bury('src', src)];
+	// see if the other thumbnails exist
 	function try_thumb(path, t) {
 		if (!t)
 			return;
 		if (!t.match(m))
-			return callback(etc.Muggle('Invalid thumbnail.'));
-		mvs.push(mv.bind(null, path, t));
+			throw etc.Muggle('Invalid thumbnail filename to delete.');
+		moves.push(bury(path, t));
 	}
 	try_thumb('thumb', info.thumb);
 	try_thumb('thumb', info.realthumb);
 	try_thumb('mid', info.mid);
-	async.parallel(mvs, callback);
-	function mv(p, nm, cb) {
-		etc.movex(media_path(p, nm), dead_path(p, nm), cb);
+	await Promise.all(moves);
+	function bury(p, nm) {
+		return etc.move_no_clobber(media_path(p, nm), dead_path(p, nm));
 	}
-});
+};
 
 function media_path(dir, filename) {
 	return path.join(config.MEDIA_DIRS[dir], filename);

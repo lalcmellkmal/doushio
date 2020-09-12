@@ -42,14 +42,13 @@ function inline_dice(post, dice) {
 	}
 }
 
-hooks.hook('attachToPost', function (attached, cb) {
-	var new_dice = attached.extra.new_dice;
+exports.attach_dice_to_post = attached => {
+	const { new_dice } = attached.extra;
 	if (new_dice) {
 		attached.attach.dice = new_dice;
 		inline_dice(attached.writeKeys, attached.post.dice);
 	}
-	cb(null);
-});
+};
 
 exports.notify_client_fun_banner = function (client, op) {
 	client.db.get_fun(op, (err, js) => {

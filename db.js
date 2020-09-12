@@ -6,7 +6,6 @@ const _ = require('./lib/underscore'),
     config = require('./config'),
     events = require('events'),
     fs = require('fs'),
-    hooks = require('./hooks'),
     ipUtils = require('ip'),
     Muggle = require('./etc').Muggle,
     tail = require('./tail'),
@@ -952,7 +951,7 @@ Y.hide_image = function (key, callback) {
 	const r = this.connect();
 	const imgKeys = ['hideimg', 'hash', 'src', 'thumb', 'realthumb', 'mid'];
 
-	const move_dead = (err, rs) => {
+	r.hmget(key, imgKeys, (err, rs) => {
 		if (err)
 			return callback(err);
 		if (!rs)
@@ -962,10 +961,8 @@ Y.hide_image = function (key, callback) {
 			info[imgKeys[i]] = rs[i];
 		if (info.hideimg) /* already gone */
 			return callback(null);
-		hooks.trigger("buryImage", info, callback);
-	}
-
-	r.hmget(key, imgKeys, move_dead);
+		imager.bury_image(info).then(() => callback(null), callback);
+	});
 };
 
 Y.force_image_spoilers = function (nums, callback) {
@@ -1119,10 +1116,10 @@ Y.append_post = function (post, tail, old_state, extra, cb) {
 		m.hmset(key + ':links', extra.new_links);
 
 	// possibly attach data for dice rolls etc. to the update
-	const attached = {post: post, extra: extra, writeKeys: {}, attach: {}};
-	hooks.trigger("attachToPost", attached, (err, attached) => {
-		if (err)
-			return cb(err);
+	const attached = {post, extra, writeKeys: {}, attach: {}};
+	amusement.attach_dice_to_post(attached);
+
+	{
 		for (let h in attached.writeKeys)
 			m.hset(key, h, attached.writeKeys[h]);
 		const msg = [post.num, tail];
@@ -1143,7 +1140,7 @@ Y.append_post = function (post, tail, old_state, extra, cb) {
 
 		this._log(m, post.op || post.num, common.UPDATE_POST, msg);
 		m.exec(cb);
-	});
+	}
 };
 
 register_lua('finish');

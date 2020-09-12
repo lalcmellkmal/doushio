@@ -48,6 +48,7 @@ exports.move = function (src, dest) {
 	});
 };
 
+/// no-clobber mv
 exports.movex = function (src, dest, callback) {
 	child_process.execFile('/bin/mv', ['-n', '--', src, dest],
 				function (err, stdout, stderr) {
@@ -59,24 +60,32 @@ exports.movex = function (src, dest, callback) {
 	});
 };
 
-exports.cpx = function (src, dest, callback) {
+exports.move_no_clobber = (src, dest) => {
+	return new Promise((resolve, reject) => {
+		exports.movex(src, dest, err => err ? reject(err) : resolve())
+	});
+};
+
+exports.copy = function (src, dest) {
+	return new Promise((resolve, reject) => {
+
 	// try to do a graceful (non-overwriting) copy
 	child_process.execFile('/bin/cp', ['-n', '--', src, dest],
-				function (err, stdout, stderr) {
+				(err, stdout, stderr) => {
 		if (err) {
-			winston.warn('overwriting (' + src + ') to (' + dest + ').');
+			winston.warn(`overwriting (${src}) to (${dest}).`);
 			// just overwrite
-			child_process.execFile('/bin/cp', ['--', src, dest], function (err, o, e) {
+			child_process.execFile('/bin/cp', ['--', src, dest], (err, o, e) => {
 				if (err)
-					callback(Muggle("Couldn't copy file into place.",
-							e || err));
+					reject(Muggle("Couldn't copy file into place.", e || err));
 				else
-					callback(null);
+					resolve();
 			});
-
 		}
 		else
-			callback(null);
+			resolve();
+	});
+
 	});
 };
 
