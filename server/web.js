@@ -3,7 +3,6 @@ var _ = require('../lib/underscore'),
     caps = require('./caps'),
     config = require('../config'),
     formidable = require('formidable'),
-    hooks = require('../hooks'),
     Stream = require('stream'),
     url_parse = require('url').parse,
     util = require('util'),
@@ -318,11 +317,10 @@ exports.noCacheHeaders = noCacheHeaders;
 exports.notFoundHtml = preamble + '<title>404</title>404';
 exports.serverErrorHtml = preamble + '<title>500</title>Server error';
 
-hooks.hook('reloadResources', function (res, cb) {
+exports.set_error_templates = (res) => {
 	exports.notFoundHtml = res.notFoundHtml;
 	exports.serverErrorHtml = res.serverErrorHtml;
-	cb(null);
-});
+};
 
 function render_404(resp) {
 	resp.writeHead(404, noCacheHeaders);

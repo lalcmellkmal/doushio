@@ -1,11 +1,8 @@
-var async = require('async'),
-    authcommon = require('../admin/common'),
+const authcommon = require('../admin/common'),
     check = require('./msgcheck').check,
-    common = require('../common'),
     config = require('../config'),
     curfew = require('../curfew/server'),
-    db = require('../db'),
-    hooks = require('../hooks');
+    db = require('../db');
 
 var RANGES = require('./state').dbCache.ranges;
 
@@ -152,34 +149,30 @@ function range_lookup(ranges, num) {
 	return result;
 }
 
-hooks.hook('reloadHot', function (hot, cb) {
-	var r = global.redis;
-	async.forEach(authcommon.suspensionKeys, function (key, cb) {
-		global.redis.smembers('hot:' + key, function (err, ranges) {
-			if (err)
-				return cb(err);
-			if (key == 'suspensions')
-				ranges = parse_suspensions(ranges);
-			var up = key.toUpperCase();
-			hot[up] = (hot[up] || []).concat(ranges || []);
-			RANGES[key] = parse_ranges(hot[up]);
-			cb(null);
-		});
-	}, cb);
-});
+exports.reload_suspensions = async (hot) => {
+	const r = global.redis;
+	await Promise.all(authcommon.suspensionKeys.map(async (key) => {
+		let ranges = await r.promise.smembers('hot:' + key);
+		if (key == 'suspensions')
+			ranges = parse_suspensions(ranges);
+		const up = key.toUpperCase();
+		hot[up] = (hot[up] || []).concat(ranges || []);
+		RANGES[key] = parse_ranges(hot[up]);
+	}));
+};
 
 function parse_suspensions(suspensions) {
 	if (!suspensions)
 		return [];
-	var parsed = [];
-	suspensions.forEach(function (s) {
+	const parsed = [];
+	for (let s of suspensions) {
 		try {
 			parsed.push(JSON.parse(s));
 		}
 		catch (e) {
 			winston.error("Bad suspension JSON: " + s);
 		}
-	});
+	}
 	return parsed;
 }
 

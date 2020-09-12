@@ -1,15 +1,10 @@
-var _ = require('../lib/underscore'),
-    async = require('async'),
+const _ = require('../lib/underscore'),
     config = require('../config'),
     crypto = require('crypto'),
-    fs = require('fs'),
-    hooks = require('../hooks'),
     path = require('path'),
     pipeline = require('../pipeline'),
-    { promisify } = require('util'),
+    { readFile } = require('../etc'),
     vm = require('vm');
-
-const readFile = promisify(fs.readFile);
 
 _.templateSettings = {
 	interpolate: /\{\{(.+?)\}\}/g
@@ -45,38 +40,32 @@ async function reload_hot_config() {
 		delete HOT[k];
 	}
 	_.extend(HOT, hot.hot);
-	await new Promise((resolve, reject) => {
-		hooks.trigger('reloadHot', HOT, err => {
-			err ? reject(err) : resolve()
-		});
-	});
+
+	const caps = require('./caps');
+	await caps.reload_suspensions(HOT);
+	await reload_conn_token();
 }
 
 // load the encryption key for connToken
-hooks.hook('reloadHot', function (hot, cb) {
-	var r = global.redis;
-	var key = 'ctoken-secret-key';
-	r.get(key, function (err, secretHex) {
-		if (err) return cb(err);
-		if (secretHex) {
-			var secretBytes = Buffer.from(secretHex, 'hex');
-			if (secretBytes.length != 32)
-				return cb('ctoken secret key is invalid');
-			HOT.connTokenSecretKey = secretBytes;
-			return cb(null);
-		}
+async function reload_conn_token() {
+	const r = global.redis;
+	const key = 'ctoken-secret-key';
+	const secretHex = await r.promise.get(key);
+	if (secretHex) {
+		const secretBytes = Buffer.from(secretHex, 'hex');
+		if (secretBytes.length != 32)
+			throw new Error('ctoken secret key is invalid');
+		HOT.connTokenSecretKey = secretBytes;
+	} else {
 		// generate a new one
-		var secretKey = crypto.randomBytes(32);
-		r.setnx(key, secretKey.toString('hex'), function (err, wasSet) {
-			if (err) return cb(err);
-			if (wasSet)
-				HOT.connTokenSecretKey = secretKey;
-			else
-				assert(!!HOT.connTokenSecretKey);
-			cb(null);
-		});
-	});
-});
+		const secretKey = crypto.randomBytes(32);
+		const wasSet = await r.promise.setnx(key, secretKey.toString('hex'));
+		if (wasSet)
+			HOT.connTokenSecretKey = secretKey;
+		else
+			throw new Error("reload_conn_token race?!");
+	}
+}
 
 async function reload_scripts() {
 	const filename = path.join('state', 'scripts.json');
@@ -93,35 +82,25 @@ async function reload_scripts() {
 	RES.modJs = modSrc;
 }
 
-function reload_resources() {
-	return new Promise((resolve, reject) => {
-
-		const deps = require('../deps');
-
-		read_templates((err, tmpls) => {
-			if (err)
-				return reject(err);
-			_.extend(RES, expand_templates(tmpls));
-			hooks.trigger('reloadResources', RES, err => {
-				err ? reject(err) : resolve()
-			});
-		});
-	});
+async function reload_resources() {
+	const tmpls = await read_templates();
+	_.extend(RES, expand_templates(tmpls));
+	// idk why the web module doesn't simply use our exported resources?
+	require('./web').set_error_templates(RES);
 }
 
-function read_templates(cb) {
-	function read(dir, file) {
-		return fs.readFile.bind(fs, path.join(dir, file), 'UTF-8');
-	}
+async function read_templates() {
+	const read = (dir, file) => readFile(path.join(dir, file), 'UTF-8');
 
-	async.parallel({
-		index: read('tmpl', 'index.html'),
-		filter: read('tmpl', 'filter.html'),
-		curfew: read('tmpl', 'curfew.html'),
-		suspension: read('tmpl', 'suspension.html'),
-		notFound: read('www', '404.html'),
-		serverError: read('www', '50x.html'),
-	}, cb);
+	const [index, filter, curfew, suspension, notFound, serverError] = await Promise.all([
+		read('tmpl', 'index.html'),
+		read('tmpl', 'filter.html'),
+		read('tmpl', 'curfew.html'),
+		read('tmpl', 'suspension.html'),
+		read('www', '404.html'),
+		read('www', '50x.html'),
+	]);
+	return { index, filter, curfew, suspension, notFound, serverError };
 }
 
 function expand_templates(res) {

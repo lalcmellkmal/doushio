@@ -1,7 +1,6 @@
-var common = require('../common'),
-    hooks = require('../hooks');
+const common = require('../common');
 
-var rollLimit = 5;
+const rollLimit = 5;
 
 exports.roll_dice = function (frag, post, extra) {
 	var ms = frag.split(common.dice_re);

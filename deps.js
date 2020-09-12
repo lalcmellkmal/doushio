@@ -43,7 +43,6 @@ exports.SERVER_DEPS = [
 	'db.js',
 	'deps.js',
 	'etc.js',
-	'hooks.js',
 	'make_client.js',
 	'pipeline.js',
 	'tail.js',
