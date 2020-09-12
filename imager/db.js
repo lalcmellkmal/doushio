@@ -141,7 +141,7 @@ O.obtain_image_alloc = function (id, callback) {
 	});
 };
 
-exports.is_standalone = function () { return STANDALONE; };
+exports.is_standalone = () => STANDALONE;
 
 O.commit_image_alloc = function (alloc, cb) {
 	// We should already hold the lock at this point.

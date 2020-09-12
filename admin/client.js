@@ -344,7 +344,7 @@ var AddrView = Backbone.View.extend({
 
 var Addresses = Backbone.Collection.extend({
 	model: Address,
-	comparator: function (a) { return ip_mnemonic(a.ip); },
+	comparator: a => ip_mnemonic(a.ip),
 });
 
 window.addrs = new Addresses;

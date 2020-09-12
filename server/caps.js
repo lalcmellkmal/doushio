@@ -133,7 +133,7 @@ function parse_ranges(ranges) {
 		else
 			return {ip: parse_ip(o)};
 	});
-	ranges.sort(function (a, b) { return a.ip.num - b.ip.num; });
+	ranges.sort((a, b) => a.ip.num - b.ip.num);
 	return ranges;
 }
 

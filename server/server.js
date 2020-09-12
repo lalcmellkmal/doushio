@@ -991,7 +991,7 @@ dispatcher[common.DELETE_POSTS] = caps.mod_handler(function (nums, client) {
 dispatcher[common.LOCK_THREAD] = caps.mod_handler(function (nums, client) {
 	if (!inactive_board_check(client))
 		return client.kotowaru(Muggle("Couldn't (un)lock thread."));
-	nums = nums.filter(function (op) { return db.OPs[op] == op; });
+	nums = nums.filter(op => db.OPs[op] == op);
 	async.forEach(nums, client.db.toggle_thread_lock.bind(client.db),
 				function (err) {
 		if (err)

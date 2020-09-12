@@ -65,7 +65,7 @@ var vapor = 0, wombo = 0, eject = 0;
 
 menuHandlers.Eject = function () {
 	vapor = wombo = eject = 0;
-	ComposerView.prototype.word_filter = function (w) { return w; };
+	ComposerView.prototype.word_filter = (w) => w;
 	flash_bg('white');
 };
 
