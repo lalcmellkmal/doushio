@@ -697,7 +697,7 @@ Y.remove_post = async function (from_thread, num) {
 
 		/* In the background, try to finish the post */
 		this.finish_quietly(key, warn);
-		this.hide_image(key, warn);
+		this.hide_image(key).catch(warn);
 	}
 
 	return [op, num];
@@ -805,7 +805,7 @@ Y.remove_thread = async function (op) {
 	// Clean everything up in the background if anything is still there
 	{
 		this.finish_quietly(dead_key, warn);
-		this.hide_image(dead_key, warn);
+		this.hide_image(dead_key).catch(warn);
 	}
 };
 
@@ -894,71 +894,65 @@ Y.archive_thread = function (op, callback) {
 
 /* BOILERPLATE CITY */
 
-Y.remove_images = function (nums, callback) {
+Y.gate_read_only = function () {
 	if (this.ident.readOnly)
-		return callback(Muggle("Read-only right now."));
-	let threads = {};
-	let rem = this.remove_image.bind(this, threads);
-	tail.forEach(nums, rem, err => {
-		if (err)
-			return callback(err);
-		const m = this.connect().multi();
-		for (let op in threads)
-			this._log(m, op, common.DELETE_IMAGES, threads[op], {tags: tags_of(op)});
-		m.exec(callback);
-	});
+		throw Muggle("Read-only right now.");
 };
 
-Y.remove_image = function (threads, num, cb) {
-	if (this.ident.readOnly)
-		return cb(Muggle("Read-only right now."));
+Y.remove_images = async function (nums) {
+	this.gate_read_only();
+
 	const r = this.connect();
-	const op = OPs[num];
-	if (!op)
-		cb(null, false);
-	const key = (op == num ? 'thread:' : 'post:') + num;
-	r.hexists(key, 'src', (err, exists) => {
-		if (err)
-			return cb(err);
+	const threads = new Map();
+	await Promise.all(nums.map(async (num) => {
+		const op = OPs[num];
+		if (!op)
+			return;
+		const key = (op == num ? 'thread:' : 'post:') + num;
+		const exists = await r.promise.hexists(key, 'src');
 		if (!exists)
-			return cb(null);
-		this.hide_image(key, err => {
-			if (err)
-				return cb(err);
-			r.hset(key, 'hideimg', 1, (err, affected) => {
-				if (err)
-					return cb(err);
-				if (!affected)
-					return cb(null);
+			return;
 
-				if (threads[op])
-					threads[op].push(num);
-				else
-					threads[op] = [num];
-				r.hincrby('thread:' + op, 'imgctr', -1, cb);
-			});
-		});
-	});
+		// remove it from the filesystem
+		await this.hide_image(key);
+
+		// remove it from the thread
+		const affected = await r.promise.hset(key, 'hideimg', 1);
+		if (!affected)
+			return;
+		// update the accounting
+		await r.promise.hincrby('thread:' + op, 'imgctr', -1);
+		// track which images were deleted for the log later
+		if (threads.has(op))
+			threads.get(op).push(num);
+		else
+			threads.set(op, [num]);
+	}));
+
+	const m = r.multi();
+	for (let [op, nums] of threads.entries())
+		this._log(m, op, common.DELETE_IMAGES, nums, {tags: tags_of(op)});
+	await m.promise.exec();
 };
 
-Y.hide_image = function (key, callback) {
-	if (this.ident.readOnly)
-		return callback(Muggle("Read-only right now."));
-	const r = this.connect();
-	const imgKeys = ['hideimg', 'hash', 'src', 'thumb', 'realthumb', 'mid'];
+/// Move this image's files to the graveyard.
+Y.hide_image = async function (key) {
+	this.gate_read_only();
 
-	r.hmget(key, imgKeys, (err, rs) => {
-		if (err)
-			return callback(err);
-		if (!rs)
-			return callback(null);
-		const info = {};
-		for (let i = 0; i < rs.length; i++)
-			info[imgKeys[i]] = rs[i];
-		if (info.hideimg) /* already gone */
-			return callback(null);
-		imager.bury_image(info).then(() => callback(null), callback);
-	});
+	const r = this.connect();
+	// load up the relevant image state
+	const imgKeys = ['hideimg', 'hash', 'src', 'thumb', 'realthumb', 'mid'];
+	const rs = await r.promise.hmget(key, imgKeys);
+	if (!rs)
+		return;
+	const image = {};
+	for (let i = 0; i < rs.length; i++)
+		image[imgKeys[i]] = rs[i];
+	if (image.hideimg) /* already gone */
+		return;
+
+	// finally, ask the imager to move it to the graveyard
+	await imager.bury_image(image);
 };
 
 Y.force_image_spoilers = function (nums, callback) {

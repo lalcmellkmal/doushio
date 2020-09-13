@@ -999,13 +999,12 @@ dispatcher[common.LOCK_THREAD] = caps.mod_handler(function (nums, client) {
 	});
 });
 
-dispatcher[common.DELETE_IMAGES] = caps.mod_handler(function (nums, client) {
+dispatcher[common.DELETE_IMAGES] = caps.mod_handler((nums, client) => {
 	if (!inactive_board_check(client))
 		return client.kotowaru(Muggle("Couldn't delete images."));
-	client.db.remove_images(nums, function (err, dels) {
-		if (err)
-			client.kotowaru(Muggle("Couldn't delete images.",err));
-	});
+	client.db
+		.remove_images(nums)
+		.catch(err => { client.kotowaru(Muggle("Couldn't delete images.", err)) });
 });
 
 dispatcher[common.INSERT_IMAGE] = function (msg, client) {
