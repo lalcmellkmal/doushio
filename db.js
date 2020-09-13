@@ -38,6 +38,15 @@ function redis_client() {
 			[name]: util.promisify(method).bind(conn)
 		}), {});
 
+	// multi() should return something with `.promise.exec()` available
+	conn.multi = function () {
+		const r = RedisClient.prototype.multi.call(this);
+		r.promise = {
+			exec: util.promisify(r.exec).bind(r)
+		};
+		return r;
+	};
+
 	// ASYNC SETUP RACE!
 	const load = entry => {
 		conn.script('load', entry.src, (err, sha) => {
