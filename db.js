@@ -103,8 +103,8 @@ Subscription.full_key = function (target, ident) {
 		channel = 'priv:' + ident.priv;
 	else if (caps.can_moderate(ident))
 		channel = 'auth';
-	let key = channel ? channel + ':' + target : target;
-	return {key: key, channel: channel, target: target};
+	let key = channel ? `${channel}:${target}` : target;
+	return {key, channel, target};
 };
 
 Subscription.get = function (target, ident) {
@@ -125,7 +125,7 @@ S.when_ready = function (cb) {
 S.on_one_sub = function (name) {
 	let i = this.pending_subscriptions.indexOf(name);
 	if (i < 0)
-		throw "Obtained unasked-for subscription " + name + "?!";
+		throw new Error(`Obtained unasked-for subscription ${name}?!`);
 	this.pending_subscriptions.splice(i, 1);
 	if (this.pending_subscriptions.length == 0)
 		this.on_all_subs();
@@ -303,7 +303,7 @@ exports.track_OPs = () => {
 		k.once('error', reject);
 		k.subscribe('cache');
 		k.once('subscribe', () => {
-			load_OPs(resolve);
+			load_OPs().then(resolve, reject);
 		});
 		k.on('message', update_cache);
 		/* k persists for the purpose of cache updates */
@@ -318,70 +318,60 @@ exports.on_pub = function (name, handler) {
 	/* k persists */
 };
 
-function load_OPs(callback) {
+async function load_OPs() {
 	const r = global.redis;
 	const boards = config.BOARDS;
 
 	let threadsKey;
 	let expiryKey = expiry_queue_key();
 
-	const scan_board = (tag, cb) => {
-		const tagIndex = boards.indexOf(tag);
-		threadsKey = 'tag:' + tag_key(tag) + ':threads';
-		r.zrange(threadsKey, 0, -1, (err, threads) => {
-			if (err)
-				return cb(err);
-			async.forEach(threads, (op, cb) => {
-				op = parse_number(op);
-				let ps = [scan_thread.bind(null, tagIndex, op)];
-				if (!config.READ_ONLY && config.THREAD_EXPIRY && tag != 'archive') {
-					ps.push(refresh_expiry.bind(null, tag, op));
-				}
-				async.parallel(ps, cb);
-			}, cb);
-		});
-	};
+	// Want consistent ordering in the TAGS entries for multi-tag threads
+	// (so do them in series)
+	for (let tagIndex = 0; tagIndex < boards.length; tagIndex++) {
+		const tag = boards[tagIndex];
+		threadsKey = `tag:${tag_key(tag)}:threads`;
+		const threads = await r.promise.zrange(threadsKey, 0, -1);
+		for (let op of threads) {
+			op = parse_number(op);
+			let ps = [scan_thread(tagIndex, op)];
+			if (!config.READ_ONLY && config.THREAD_EXPIRY && tag != 'archive') {
+				ps.push(refresh_expiry(tag, op));
+			}
+			await Promise.all(ps);
+		}
+	}
 
-	const scan_thread = (tagIndex, op, cb) => {
+	async function scan_thread(tagIndex, op) {
 		op = parse_number(op);
 		add_OP_tag(tagIndex, op);
 		OPs[op] = op;
-		get_all_replies_and_privs(r, op, (err, posts) => {
-			if (err)
-				return cb(err);
-			posts.forEach(num => {
-				OPs[parse_number(num)] = op;
-			});
-			cb(null);
-		});
-	};
-
-	const refresh_expiry = (tag, op, cb) => {
-		if (tag == config.STAFF_BOARD)
-			return cb(null);
-		const entry = op + ':' + tag_key(tag);
-		const queries = ['time', 'immortal'];
-		hmget_obj(r, 'thread:'+op, queries, (err, thread) => {
-			if (err)
-				return cb(err);
-			if (!thread.time) {
-				winston.warn('Thread '+op+" doesn't exist.");
-				const m = r.multi();
-				m.zrem(threadsKey, op);
-				m.zrem(expiryKey, entry);
-				m.exec(cb);
-				return;
-			}
-			if (thread.immortal)
-				return r.zrem(expiryKey, entry, cb);
-			const score = expiry_queue_score(thread.time);
-			r.zadd(expiryKey, score, entry, cb);
-		});
+		const [posts, _privs] = await get_all_replies_and_privs(r, op);
+		for (let num of posts) {
+			OPs[parse_number(num)] = op;
+		}
 	}
 
-	// Want consistent ordering in the TAGS entries for multi-tag threads
-	// (so do them in series)
-	tail.forEach(boards, scan_board, callback);
+	async function refresh_expiry(tag, op) {
+		if (tag == config.STAFF_BOARD)
+			return;
+		const entry = op + ':' + tag_key(tag);
+		const queries = ['time', 'immortal'];
+		const thread = await hmget_obj(r, 'thread:'+op, queries);
+		if (!thread.time) {
+			winston.warn(`Thread #${op} doesn't exist.`);
+			const m = r.multi();
+			m.zrem(threadsKey, op);
+			m.zrem(expiryKey, entry);
+			await m.promise.exec();
+		}
+		else if (thread.immortal) {
+			await r.promise.zrem(expiryKey, entry);
+		}
+		else {
+			const score = expiry_queue_score(thread.time);
+			await r.promise.zadd(expiryKey, score, entry);
+		}
+	}
 }
 
 function expiry_queue_score(time) {
@@ -672,143 +662,130 @@ Y.insert_post = function (msg, body, extra, callback) {
 	});
 };
 
-Y.remove_post = function (from_thread, num, callback) {
+/// Weird interface.
+/// Under normal circumstances returns [deleted_op, deleted_num].
+/// If a race condition occurs, returns (-deleted_num)
+Y.remove_post = async function (from_thread, num) {
 	num = parse_number(num);
 	let op = OPs[num];
 	if (!op)
-		return callback(Muggle('No such post.'));
+		throw Muggle('No such post.');
 	if (op == num) {
 		if (!from_thread)
-			return callback('Deletion loop?!');
-		return this.remove_thread(num, callback);
+			throw Muggle('Deletion loop?!');
+		return await this.remove_thread(num);
 	}
 
 	let r = this.connect();
 
-	const gone_from_thread = () => {
-		let key = 'post:' + num;
-		r.hset(key, 'hide', '1', err => {
-			if (err) {
-				/* Difficult to recover. Whatever. */
-				winston.warn("Couldn't hide: " + err);
-			}
-			/* TODO push cache update? */
-			delete OPs[num];
-
-			callback(null, [op, num]);
-
-			/* In the background, try to finish the post */
-			this.finish_quietly(key, warn);
-			this.hide_image(key, warn);
-		});
-	}
-
 	if (from_thread) {
-		let key = 'thread:' + op;
-		r.lrem(key + ':posts', -1, num, (err, delCount) => {
-			if (err)
-				return callback(err);
-			/* did someone else already delete this? */
-			if (delCount != 1)
-				return callback(null, -num);
-			/* record deletion */
-			r.rpush(key + ':dels', num, err => {
-				if (err)
-					winston.warn(err);
-				gone_from_thread();
-			});
-		});
+		const key = 'thread:' + op;
+		const delCount = await r.promise.lrem(key + ':posts', -1, num);
+		/* did someone else already delete this? */
+		if (delCount != 1)
+			return -num;
+		/* record deletion */
+		await r.promise.rpush(key + ':dels', num);
 	}
-	else
-		gone_from_thread();
+
+	// okay, it's gone from the thread
+	{
+		const key = 'post:' + num;
+		await r.promise.hset(key, 'hide', '1');
+		/* TODO push cache update? */
+		delete OPs[num];
+
+		/* In the background, try to finish the post */
+		this.finish_quietly(key, warn);
+		this.hide_image(key, warn);
+	}
+
+	return [op, num];
 };
 
-Y.remove_posts = function (nums, callback) {
-	tail.map(nums, this.remove_post.bind(this, true), (err, dels) => {
-		if (err)
-			return callback(err);
-		let threads = {}, already_gone = [];
-		dels.forEach(del => {
-			if (Array.isArray(del)) {
-				const op = del[0];
-				if (!(op in threads))
-					threads[op] = [];
-				threads[op].push(del[1]);
-			}
-			else if (del < 0)
-				already_gone.push(-del);
-			else if (del)
-				winston.warn('Unknown del: ' + del);
-		});
-		if (already_gone.length)
-			winston.warn("Tried to delete missing posts: " +
-					already_gone);
-		if (_.isEmpty(threads))
-			return callback(null);
+Y.remove_posts = async function (nums) {
+	const dels = await Promise.all(nums.map(num => this.remove_post(true, num)));
+
+	let threads = {}, already_gone = [];
+	for (let del of dels) {
+		// parse the weird return val of `remove_post` (todo refactor)
+		if (Array.isArray(del)) {
+			const op = del[0];
+			if (!(op in threads))
+				threads[op] = [];
+			threads[op].push(del[1]);
+		}
+		else if (del < 0)
+			already_gone.push(-del);
+		else if (del)
+			winston.warn('Unknown del: ' + del);
+	}
+	if (already_gone.length)
+		winston.warn("Tried to delete missing posts: " + already_gone);
+
+	if (!_.isEmpty(threads)) {
 		let m = this.connect().multi();
 		for (let op in threads) {
 			let nums = threads[op];
 			nums.sort();
-			let opts = {cacheUpdate: {nums: nums}};
+			let opts = {cacheUpdate: {nums}};
 			this._log(m, op, common.DELETE_POSTS, nums, opts);
 		}
-		m.exec(callback);
-	});
+		await m.promise.exec();
+	}
 };
 
-Y.remove_thread = function (op, callback) {
+Y.remove_thread = async function (op) {
 	if (OPs[op] != op)
-		return callback(Muggle('Thread does not exist.'));
+		throw new Muggle('Thread does not exist.');
 	const r = this.connect();
-	let key = 'thread:' + op, dead_key = 'dead:' + op;
-	let graveyardKey = 'tag:' + tag_key('graveyard');
-	let privs = null;
-	let etc = {cacheUpdate: {}};
-	async.waterfall([
-	next => {
-		get_all_replies_and_privs(r, op, next);
-	},
-	(nums, threadPrivs, next) => {
-		etc.cacheUpdate.nums = nums;
-		privs = threadPrivs;
-		if (!nums || !nums.length)
-			return next(null, []);
-		tail.map(nums, this.remove_post.bind(this, false), next);
-	},
-	(dels, next) => {
+	const key = 'thread:' + op;
+	const dead_key = 'dead:' + op;
+	const graveyardKey = 'tag:' + tag_key('graveyard');
+	const [nums, privs] = await get_all_replies_and_privs(r, op);
+	const opts = {
+		cacheUpdate: {nums}
+	};
+
+	await Promise.all(nums.map(num => this.remove_post(false, num)));
+
+	let deadCtr, post;
+	{
 		const m = r.multi();
 		m.incr(graveyardKey + ':bumpctr');
 		m.hgetall(key);
-		m.exec(next);
-	},
-	(rs, next) => {
-		let deadCtr = rs[0], post = rs[1];
+		[deadCtr, post] = await m.promise.exec();
+	}
+	// Delete the thread from the index, and rename its keys
+	let results;
+	{
 		let tags = parse_tags(post.tags);
 		let subject = subject_val(op, post.subject);
 		/* Rename thread keys, move to graveyard */
 		const m = r.multi();
 		const expiryKey = expiry_queue_key();
-		tags.forEach(tag => {
+		for (let tag of tags) {
 			const tagKey = tag_key(tag);
 			m.zrem(expiryKey, op + ':' + tagKey);
 			m.zrem('tag:' + tagKey + ':threads', op);
 			if (subject)
 				m.zrem('tag:' + tagKey + ':subjects', subject);
-		});
+		}
 		m.zadd(graveyardKey + ':threads', deadCtr, op);
-		etc.tags = tags;
-		this._log(m, op, common.DELETE_THREAD, [], etc);
+		opts.tags = tags;
+		this._log(m, op, common.DELETE_THREAD, [], opts);
 		m.hset(key, 'hide', 1);
 		/* Next two vals are checked */
 		m.renamenx(key, dead_key);
 		m.renamenx(key + ':history', dead_key + ':history');
 		m.renamenx(key + ':ips', dead_key + ':ips');
-		m.exec(next);
-	},
-	(results, done) => {
+		results = await m.promise.exec();
+	}
+	// See if our big transaction succeeded
+	{
 		let dels = results.slice(-2);
 		if (dels.some(x => x === 0))
-			return done("Already deleted?!");
+			throw new Error("Already deleted?!");
 		delete OPs[op];
 		delete TAGS[op];
 
@@ -818,18 +795,18 @@ Y.remove_thread = function (op, callback) {
 		m.rename(key + ':links', dead_key + ':links');
 		if (privs.length) {
 			m.rename(key + ':privs', dead_key + ':privs');
-			privs.forEach(priv => {
+			for (let priv of privs) {
 				const suff = ':privs:' + priv;
 				m.rename(key + suff, dead_key + suff);
-			});
+			}
 		}
-		m.exec(err => {
-			done(err, null); /* second arg is remove_posts dels */
-		});
-		/* Background, might not even be there */
+		await m.promise.exec();
+	}
+	// Clean everything up in the background if anything is still there
+	{
 		this.finish_quietly(dead_key, warn);
 		this.hide_image(dead_key, warn);
-	}], callback);
+	}
 };
 
 Y.archive_thread = function (op, callback) {
@@ -1667,27 +1644,20 @@ function parse_number(n) {
 	return parseInt(n, 10);
 }
 
-/* Including hidden or private. Not in-order. */
-function get_all_replies_and_privs(r, op, cb) {
+/// Including hidden or private. Not in-order.
+async function get_all_replies_and_privs(r, op) {
 	const key = 'thread:' + op;
 	const m = r.multi();
 	m.lrange(key + ':posts', 0, -1);
 	m.smembers(key + ':privs');
-	m.exec((err, rs) => {
-		if (err)
-			return cb(err);
-		let nums = rs[0], privs = rs[1];
-		if (!privs.length)
-			return cb(null, nums, privs);
+	let [nums, privs] = await m.promise.exec();
+	if (privs.length) {
 		const m = r.multi();
-		privs.forEach(priv => m.lrange(key + ':privs:' + priv, 0, -1));
-		m.exec((err, rs) => {
-			if (err)
-				return cb(err);
-			rs.forEach(ns => nums.push.apply(nums, ns));
-			cb(null, nums, privs);
-		});
-	});
+		privs.forEach(priv => m.lrange(`${key}:privs:${priv}`, 0, -1));
+		const rs = await m.promise.exec();
+		rs.forEach(ns => nums.push.apply(nums, ns));
+	}
+	return [nums, privs];
 }
 
 
@@ -1942,15 +1912,12 @@ function parse_tags(input) {
 }
 exports.parse_tags = parse_tags;
 
-function hmget_obj(r, key, keys, cb) {
-	r.hmget(key, keys, (err, rs) => {
-		if (err)
-			return cb(err);
-		const result = {};
-		for (let i = 0; i < keys.length; i++)
-			result[keys[i]] = rs[i];
-		cb(null, result);
-	});
+async function hmget_obj(r, key, keys) {
+	const rs = await r.promise.hmget(key, keys);
+	const result = {};
+	for (let i = 0; i < keys.length; i++)
+		result[keys[i]] = rs[i];
+	return result;
 }
 
 /// converts a lua bulk response to a hash
