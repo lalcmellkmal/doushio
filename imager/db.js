@@ -1,8 +1,7 @@
 var config = require('./config'),
     events = require('events'),
     fs = require('fs'),
-    Muggle = require('../etc').Muggle,
-    tail = require('../tail'),
+    { Muggle, unlink } = require('../etc'),
     util = require('util'),
     winston = require('winston');
 
@@ -88,25 +87,19 @@ O.cleanup_image_alloc = function (path, cb) {
 };
 
 // catch any dangling images on server startup
-O.delete_temporaries = function (callback) {
-	var r = this.connect();
-	r.smembers('temps', function (err, temps) {
-		if (err)
-			return callback(err);
-		tail.forEach(temps, function (temp, cb) {
-			fs.unlink(temp, function (err) {
-				if (err)
-					winston.warn('temp: ' + err);
-				else
-					winston.info('del temp ' + temp);
-				cb(null);
-			});
-		}, function (err) {
-			if (err)
-				return callback(err);
-			r.del('temps', callback);
-		});
-	});
+O.delete_temporaries = async function () {
+	const r = this.connect();
+	const temps = await r.promise.smembers('temps');
+	for (let temp of temps) {
+		try {
+			await unlink(temp);
+			winston.info(`del temp ${temp}`);
+		}
+		catch (err) {
+			winston.warn(`temp ${temp}: ${err}`);
+		}
+	}
+	await r.del('temps');
 };
 
 O.check_duplicate = function (hash, callback) {
