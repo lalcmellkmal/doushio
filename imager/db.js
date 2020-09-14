@@ -1,12 +1,12 @@
-var config = require('./config'),
+const config = require('./config'),
     events = require('events'),
     fs = require('fs'),
     { Muggle, unlink } = require('../etc'),
     util = require('util'),
     winston = require('winston');
 
-var IMG_EXPIRY = 60;
-var STANDALONE = !!config.DAEMON;
+const IMG_EXPIRY = 60;
+const STANDALONE = !!config.DAEMON;
 
 function redis_client() {
 	const db = require('../db');
@@ -27,7 +27,7 @@ function Onegai() {
 
 util.inherits(Onegai, events.EventEmitter);
 exports.Onegai = Onegai;
-var O = Onegai.prototype;
+const O = Onegai.prototype;
 
 O.connect = function () {
 	if (STANDALONE) {
@@ -41,14 +41,12 @@ O.connect = function () {
 O.disconnect = function () {};
 
 O.track_temporary = function (path, cb) {
-	var m = this.connect();
-	var self = this;
-	m.sadd('temps', path, function (err, tracked) {
+	const m = this.connect();
+	m.sadd('temps', path, (err, tracked) => {
 		if (err)
 			return cb(err);
 		if (tracked > 0) {
-			setTimeout(self.del_temp.bind(self, path),
-				(IMG_EXPIRY+1) * 1000);
+			setTimeout(() => this.del_temp(path), (IMG_EXPIRY+1) * 1000);
 		}
 		cb(null);
 	});
@@ -59,22 +57,21 @@ O.lose_temporaries = function (files, cb) {
 };
 
 O.del_temp = function (path) {
-	this.cleanup_image_alloc(path, function (err, deleted) {
+	this.cleanup_image_alloc(path, err => {
 		if (err) {
-			winston.warn('unlink ' + path + ': '
-					+ err);
+			winston.warn(`unlink ${path}: ${err}`);
 		}
 	});
 };
 
 // if an image doesn't get used in a post in a timely fashion, delete it
 O.cleanup_image_alloc = function (path, cb) {
-	var r = this.connect();
-	r.srem('temps', path, function (err, n) {
+	const r = this.connect();
+	r.srem('temps', path, (err, n) => {
 		if (err)
 			return winston.warn(err);
 		if (n) {
-			fs.unlink(path, function (err) {
+			fs.unlink(path, err => {
 				if (err)
 					return cb(err);
 				cb(null, true);
@@ -107,31 +104,31 @@ O.check_duplicate = function (hash, callback) {
 		if (err)
 			callback(err);
 		else if (num)
-			callback(Muggle('Duplicate of >>' + num + '.'));
+			callback(Muggle(`Duplicate of >>${num}.`));
 		else
 			callback(false);
 	});
 };
 
 O.record_image_alloc = function (id, alloc, callback) {
-	var r = this.connect();
+	const r = this.connect();
 	r.setex('image:' + id, IMG_EXPIRY, JSON.stringify(alloc), callback);
 };
 
 O.obtain_image_alloc = function (id, callback) {
-	var m = this.connect().multi();
-	var key = 'image:' + id;
+	const m = this.connect().multi();
+	const key = 'image:' + id;
 	m.get(key);
 	m.setnx('lock:' + key, '1');
 	m.expire('lock:' + key, IMG_EXPIRY);
-	m.exec(function (err, rs) {
+	m.exec((err, rs) => {
 		if (err)
 			return callback(err);
 		if (rs[1] != 1)
 			return callback(Muggle("Image in use."));
 		if (!rs[0])
 			return callback(Muggle("Image lost."));
-		var alloc = JSON.parse(rs[0]);
+		const alloc = JSON.parse(rs[0]);
 		alloc.id = id;
 		callback(null, alloc);
 	});
@@ -141,8 +138,8 @@ exports.is_standalone = () => STANDALONE;
 
 O.commit_image_alloc = function (alloc, cb) {
 	// We should already hold the lock at this point.
-	var key = 'image:' + alloc.id;
-	var m = this.connect().multi();
+	const key = 'image:' + alloc.id;
+	const m = this.connect().multi();
 	m.del(key);
 	m.del('lock:' + key);
 	m.exec(cb);
@@ -153,14 +150,13 @@ O.client_message = function (client_id, msg) {
 };
 
 O.relay_client_messages = function () {
-	var r = redis_client();
+	const r = redis_client();
 	r.psubscribe('client:*');
-	var self = this;
-	r.once('psubscribe', function () {
-		self.emit('relaying');
-		r.on('pmessage', function (pat, chan, message) {
-			var id = parseInt(chan.match(/^client:(\d+)$/)[1], 10);
-			self.emit('message', id, JSON.parse(message));
+	r.once('psubscribe', () => {
+		this.emit('relaying');
+		r.on('pmessage', (pat, chan, message) => {
+			const id = parseInt(chan.match(/^client:(\d+)$/)[1], 10);
+			this.emit('message', id, JSON.parse(message));
 		});
 	});
 };
