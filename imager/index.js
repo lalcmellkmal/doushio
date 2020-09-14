@@ -39,11 +39,7 @@ exports.send_dead_image = function (kind, filename, resp) {
 	});
 };
 
-function parse_number(n) {
-	return parseInt(n, 10);
-}
-
-function publish(alloc, cb) {
+async function publish(alloc) {
 	const copies = [];
 	const haveComp = alloc.tmps.comp && alloc.image.realthumb;
 	for (let kind in alloc.tmps) {
@@ -63,10 +59,7 @@ function publish(alloc, cb) {
 		const dest = media_path(destDir, alloc.image[destKey]);
 		copies.push(etc.copy(src, dest));
 	}
-	Promise.all(copies).then(
-		() => cb(null),
-		err => cb(err || etc.Muggle('Publish error'))
-	);
+	await Promise.all(copies).catch(err => etc.Muggle('Publish error', err));
 }
 
 function validate_alloc(alloc) {

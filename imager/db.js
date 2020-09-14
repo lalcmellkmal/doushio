@@ -136,13 +136,13 @@ O.obtain_image_alloc = function (id, callback) {
 
 exports.is_standalone = () => STANDALONE;
 
-O.commit_image_alloc = function (alloc, cb) {
+O.commit_image_alloc = async function (alloc) {
 	// We should already hold the lock at this point.
 	const key = 'image:' + alloc.id;
 	const m = this.connect().multi();
 	m.del(key);
 	m.del('lock:' + key);
-	m.exec(cb);
+	await m.promise.exec();
 };
 
 O.client_message = function (client_id, msg) {

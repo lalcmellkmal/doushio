@@ -633,7 +633,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 		if (!msg.image)
 			return next(null);
 
-		imager.commit_image_alloc(extra.image_alloc, next);
+		imager.commit_image_alloc(extra.image_alloc).then(() => next(), next);
 	},
 	next => {
 		if (ip) {
@@ -1068,11 +1068,7 @@ Y.add_image = function (post, alloc, ip, callback) {
 		if (!exists)
 			return callback(Muggle("Post does not exist."));
 
-		imager.commit_image_alloc(alloc, (err) => {
-			if (err)
-				return callback(err);
-			add_it();
-		});
+		imager.commit_image_alloc(alloc).then(add_it, callback);
 	});
 
 	const add_it = () => {
