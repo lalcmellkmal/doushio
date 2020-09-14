@@ -1,5 +1,4 @@
 const config = require('./config'),
-    child_process = require('child_process'),
     db = require('./db'),
     etc = require('../etc'),
     fs = require('fs'),
@@ -9,13 +8,12 @@ const config = require('./config'),
 exports.Onegai = db.Onegai;
 exports.config = config;
 
-var image_attrs = ('src thumb dims size MD5 hash imgnm spoiler realthumb vint'
-		+ ' apng mid audio video duration').split(' ');
+const image_attrs = ('src thumb dims size MD5 hash imgnm spoiler realthumb vint apng mid audio video duration').split(' ');
 exports.image_attrs = image_attrs;
 
 exports.send_dead_image = function (kind, filename, resp) {
 	filename = dead_path(kind, filename);
-	var stream = fs.createReadStream(filename);
+	const stream = fs.createReadStream(filename);
 	stream.once('error', function (err) {
 		if (err.code == 'ENOENT') {
 			resp.writeHead(404);
@@ -27,7 +25,7 @@ exports.send_dead_image = function (kind, filename, resp) {
 		}
 	});
 	stream.once('open', function () {
-		var h = {
+		const h = {
 			'Cache-Control': 'no-cache, no-store',
 			'Expires': 'Thu, 01 Jan 1970 00:00:00 GMT',
 		};
@@ -65,8 +63,8 @@ async function publish(alloc) {
 function validate_alloc(alloc) {
 	if (!alloc || !alloc.image || !alloc.tmps)
 		return;
-	for (var dir in alloc.tmps) {
-		var fnm = alloc.tmps[dir];
+	for (let dir in alloc.tmps) {
+		const fnm = alloc.tmps[dir];
 		if (!/^[\w_]+$/.test(fnm)) {
 			winston.warn("Suspicious filename: "
 					+ JSON.stringify(fnm));
@@ -138,10 +136,10 @@ exports.make_media_dirs = async () => {
 }
 
 exports.serve_image = function (req, resp) {
-	var m = /^\/(src|thumb|mid|vint)(\/\d+\.\w+)$/.exec(req.url);
+	const m = /^\/(src|thumb|mid|vint)(\/\d+\.\w+)$/.exec(req.url);
 	if (!m)
 		return false;
-	var root = config.MEDIA_DIRS[m[1]];
+	const root = config.MEDIA_DIRS[m[1]];
 	if (!root)
 		return false;
 	require('send')(req, m[2], {root: root}).pipe(resp);
@@ -155,7 +153,7 @@ exports.squish_MD5 = function (hash) {
 };
 
 exports.obtain_image_alloc = function (id, cb) {
-	var onegai = new db.Onegai;
+	const onegai = new db.Onegai;
 	onegai.obtain_image_alloc(id, function (err, alloc) {
 		onegai.disconnect();
 		if (err)
@@ -168,27 +166,21 @@ exports.obtain_image_alloc = function (id, cb) {
 	});
 };
 
-exports.commit_image_alloc = function (alloc, cb) {
-	publish(alloc, function (err) {
-		if (err)
-			return cb(err);
-
-		var o = new db.Onegai;
-		o.commit_image_alloc(alloc, function (err) {
-			o.disconnect();
-			cb(err);
-		});
-	});
+exports.commit_image_alloc = async function (alloc) {
+	await publish(alloc);
+	const o = new db.Onegai;
+	await o.commit_image_alloc(alloc);
+	o.disconnect();
 };
 
 exports.note_hash = function (hash, num) {
 	if (!config.DUPLICATE_COOLDOWN)
 		return;
-	var key = 'hash:' + hash;
+	const key = 'hash:' + hash;
 	db.connect().setex(key, config.DUPLICATE_COOLDOWN, num, function (err) {
 		if (err)
 			winston.warn("note hash: " + err);
 	});
 };
 
-var is_standalone = exports.is_standalone = db.is_standalone;
+const is_standalone = exports.is_standalone = db.is_standalone;
