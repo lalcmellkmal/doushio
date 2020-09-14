@@ -10,11 +10,14 @@ var IMG_EXPIRY = 60;
 var STANDALONE = !!config.DAEMON;
 
 function redis_client() {
+	const db = require('../db');
 	if (STANDALONE) {
-		return require('redis').createClient(config.DAEMON.REDIS_PORT);
+		const conn = require('redis').createClient(config.DAEMON.REDIS_PORT);
+		db.promisify_redis_client(conn);
+		return conn;
 	}
 	else {
-		return require('../db').redis_client();
+		return db.redis_client();
 	}
 }
 exports.connect = redis_client;
