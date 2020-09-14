@@ -1,8 +1,8 @@
-var async = require('async'),
+const async = require('async'),
     config = require('./config'),
     child_process = require('child_process'),
     etc = require('../etc'),
-    Muggle = etc.Muggle,
+    { Muggle } = etc,
     imagerDb = require('./db'),
     index = require('./'),
     formidable = require('formidable'),
@@ -13,23 +13,23 @@ var async = require('async'),
     util = require('util'),
     winston = require('winston');
 
-var IMAGE_EXTS = ['.png', '.jpg', '.gif'];
+const IMAGE_EXTS = ['.png', '.jpg', '.gif'];
 if (config.VIDEO && !config.DAEMON) {
 	console.warn("Please enable imager.config.DAEMON security.");
 }
 
 function new_upload(req, resp) {
-	var upload = new ImageUpload;
+	const upload = new ImageUpload;
 	upload.handle_request(req, resp);
 }
 exports.new_upload = new_upload;
 
 function get_thumb_specs(image, pinky, scale) {
-	var w = image.dims[0], h = image.dims[1];
-	var bound = config[pinky ? 'PINKY_DIMENSIONS' : 'THUMB_DIMENSIONS'];
-	var r = Math.max(w / bound[0], h / bound[1], 1);
-	var dims = [Math.round(w/r) * scale, Math.round(h/r) * scale];
-	var specs = {bound: bound, dims: dims, format: 'jpg'};
+	const w = image.dims[0], h = image.dims[1];
+	const bound = config[pinky ? 'PINKY_DIMENSIONS' : 'THUMB_DIMENSIONS'];
+	const r = Math.max(w / bound[0], h / bound[1], 1);
+	const dims = [Math.round(w/r) * scale, Math.round(h/r) * scale];
+	const specs = {bound, dims, format: 'jpg'};
 	// Note: WebMs pretend to be PNGs at this step,
 	//       but those don't need transparent backgrounds.
 	//       (well... WebMs *can* have alpha channels...)
@@ -48,21 +48,21 @@ function get_thumb_specs(image, pinky, scale) {
 	return specs;
 }
 
-var ImageUpload = function (client_id) {
+function ImageUpload(client_id) {
 	this.db = new imagerDb.Onegai;
 	this.client_id = client_id;
-};
+}
 
-var IU = ImageUpload.prototype;
+const IU = ImageUpload.prototype;
 
-var validFields = ['spoiler', 'op'];
+const validFields = ['spoiler', 'op'];
 
 IU.status = function (msg) {
 	this.client_call('status', msg);
 };
 
 IU.client_call = function (t, msg) {
-	this.db.client_message(this.client_id, {t: t, arg: msg});
+	this.db.client_message(this.client_id, {t, arg: msg});
 };
 
 IU.respond = function (code, msg) {
@@ -88,18 +88,18 @@ IU.handle_request = function (req, resp) {
 		return;
 	}
 	this.resp = resp;
-	var query = req.query || urlParse(req.url, true).query;
+	const query = req.query || urlParse(req.url, true).query;
 	this.client_id = parseInt(query.id, 10);
 	if (!this.client_id || this.client_id < 1) {
 		this.respond(400, "Bad client ID.");
 		return;
 	}
 
-	var len = parseInt(req.headers['content-length'], 10);
+	const len = parseInt(req.headers['content-length'], 10);
 	if (len > 0 && len > config.IMAGE_FILESIZE_MAX + (20*1024))
 		return this.failure(Muggle('File is too large.'));
 
-	var form = new formidable.IncomingForm({
+	const form = new formidable.IncomingForm({
 		uploadDir: config.MEDIA_DIRS.tmp,
 		maxFieldsSize: 50 * 1024,
 		hash: 'md5',
@@ -110,47 +110,48 @@ IU.handle_request = function (req, resp) {
 		else if (!part.filename && validFields.indexOf(part.name) >= 0)
 			form.handlePart(part);
 	};
-	var self = this;
-	form.once('error', function (err) {
-		self.failure(Muggle('Upload request problem.', err));
+	form.once('error', (err) => {
+		this.failure(Muggle('Upload request problem.', err));
 	});
-	form.once('aborted', function (err) {
-		self.failure(Muggle('Upload was aborted.', err));
+	form.once('aborted', (err) => {
+		this.failure(Muggle('Upload was aborted.', err));
 	});
 	this.lastProgress = 0;
 	form.on('progress', this.upload_progress_status.bind(this));
 
 	try {
-		form.parse(req, this.parse_form.bind(this));
+		form.parse(req, (err, fields, files) => {
+			if (err)
+				return this.failure(Muggle('Invalid upload.', err));
+			const { image } = files;
+			if (!image)
+				return this.failure(Muggle('No image.'));
+			this.image = image;
+			this.parse_form(fields);
+		});
 	}
 	catch (err) {
-		self.failure(err);
+		this.failure(err);
 	}
 };
 
 IU.upload_progress_status = function (received, total) {
-	var percent = Math.floor(100 * received / total);
-	var increment = (total > (512 * 1024)) ? 10 : 25;
-	var quantized = Math.floor(percent / increment) * increment;
+	const percent = Math.floor(100 * received / total);
+	const increment = (total > (512 * 1024)) ? 10 : 25;
+	const quantized = Math.floor(percent / increment) * increment;
 	if (quantized > this.lastProgress) {
-		this.status(percent + '% received...');
+		this.status(`${percent}% received...`);
 		this.lastProgress = quantized;
 	}
 };
 
-IU.parse_form = function (err, fields, files) {
-	if (err)
-		return this.failure(Muggle('Invalid upload.', err));
-	if (!files.image)
-		return this.failure(Muggle('No image.'));
-	this.image = files.image;
+IU.parse_form = function (fields) {
 	this.pinky = !!parseInt(fields.op, 10);
 
-	var spoiler = parseInt(fields.spoiler, 10);
+	const spoiler = parseInt(fields.spoiler, 10);
 	if (spoiler) {
-		var sps = config.SPOILER_IMAGES;
-		if (sps.normal.indexOf(spoiler) < 0
-				&& sps.trans.indexOf(spoiler) < 0)
+		const sps = config.SPOILER_IMAGES;
+		if (sps.normal.indexOf(spoiler) < 0 && sps.trans.indexOf(spoiler) < 0)
 			return this.failure(Muggle('Bad spoiler.'));
 		this.image.spoiler = spoiler;
 	}
@@ -158,19 +159,18 @@ IU.parse_form = function (err, fields, files) {
 	this.image.MD5 = index.squish_MD5(this.image.hash);
 	this.image.hash = null;
 
-	var self = this;
-	this.db.track_temporary(this.image.path, function (err) {
+	this.db.track_temporary(this.image.path, (err) => {
 		if (err)
 			winston.warn("Temp tracking error: " + err);
-		self.process();
+		this.process();
 	});
 };
 
 IU.process = function () {
 	if (this.failed)
 		return;
-	var image = this.image;
-	var filename = image.filename || image.name;
+	const { image } = this;
+	const filename = image.filename || image.name;
 	image.ext = path.extname(filename).toLowerCase();
 	if (image.ext == '.jpeg')
 		image.ext = '.jpg';
@@ -201,12 +201,11 @@ AutoRotateJob.prototype.describe_job = function () {
 };
 
 AutoRotateJob.prototype.perform_job = function () {
-	var self = this;
-	child_process.execFile(jheadBin, ['-autorot', this.src], function (err, stdout, stderr) {
+	child_process.execFile(jheadBin, ['-autorot', this.src], (err, stdout, stderr) => {
 		// if it failed, keep calm and thumbnail on
 		if (err)
 			winston.warn('jhead: ' + (stderr || err));
-		self.finish_job(null);
+		this.finish_job(null);
 	});
 };
 
@@ -222,18 +221,17 @@ StillJob.prototype.describe_job = function () {
 };
 
 StillJob.prototype.perform_job = function () {
-	var dest = index.media_path('tmp', 'still_'+etc.random_id());
-	var args = ['-hide_banner', '-loglevel', 'info',
+	const dest = index.media_path('tmp', 'still_'+etc.random_id());
+	const args = ['-hide_banner', '-loglevel', 'info',
 			'-i', this.src,
 			'-f', 'image2', '-vf', 'thumbnail', '-vframes', '1', '-vcodec', 'png',
 			'-y', dest];
-	var opts = {env: {AV_LOG_FORCE_NOCOLOR: '1'}};
-	var self = this;
-	child_process.execFile(ffmpegBin, args, opts, function (err, stdout, stderr) {
-		var lines = stderr ? stderr.split('\n') : [];
-		var first = lines[0];
+	const opts = {env: {AV_LOG_FORCE_NOCOLOR: '1'}};
+	child_process.execFile(ffmpegBin, args, opts, (err, stdout, stderr) => {
+		const lines = stderr ? stderr.split('\n') : [];
+		const first = lines[0];
 		if (err) {
-			var msg;
+			let msg;
 			if (/no such file or directory/i.test(first))
 				msg = "Video went missing.";
 			else if (/invalid data found when/i.test(first))
@@ -244,20 +242,21 @@ StillJob.prototype.perform_job = function () {
 				msg = "Unknown video reading error.";
 				winston.warn("Unknown ffmpeg output: "+first);
 			}
-			fs.unlink(dest, function (err) {
-				self.finish_job(Muggle(msg, stderr));
+			fs.unlink(dest, (_unlink_err) => {
+				// (ignore unlink error if any, it's just cleanup)
+				this.finish_job(Muggle(msg, stderr));
 			});
 			return;
 		}
 
-		self.test_format(first, stderr, function (format_err, has_audio, dur) {
+		this.test_format(first, stderr, (format_err, has_audio, dur) => {
 			if (err) {
-				fs.unlink(dest, function (_unlink_err) {
-					self.finish_job(Muggle(format_err));
+				fs.unlink(dest, (_unlink_err) => {
+					this.finish_job(Muggle(format_err));
 				});
 				return;
 			}
-			self.finish_job(null, {
+			this.finish_job(null, {
 				still_path: dest,
 				has_audio: has_audio,
 				duration: dur,
@@ -268,11 +267,11 @@ StillJob.prototype.perform_job = function () {
 
 StillJob.prototype.test_format = function (first, full, cb) {
 	/* Could have false positives due to chapter titles. Bah. */
-	var has_audio = /stream\s*#0.*audio:/i.test(full);
+	const has_audio = /stream\s*#0.*audio:/i.test(full);
 	/* Spoofable? */
-	var dur = /duration: (\d\d):(\d\d):(\d\d)/i.exec(full);
+	let dur = /duration: (\d\d):(\d\d):(\d\d)/i.exec(full);
 	if (dur) {
-		var m = parseInt(dur[2], 10), s = parseInt(dur[3], 10);
+		const m = parseInt(dur[2], 10), s = parseInt(dur[3], 10);
 		if (dur[1] != '00' || m > 2)
 			return cb('Video exceeds 3 minutes.');
 		dur = (m ? m + 'm' : '') + s + 's';
@@ -308,16 +307,16 @@ function video_still(src, ext, cb) {
 IU.verify_video = function (err, info) {
 	if (err)
 		return this.failure(err);
-	var self = this;
-	this.db.track_temporary(info.still_path, function (err) {
+
+	this.db.track_temporary(info.still_path, (err) => {
 		if (err)
 			winston.warn("Tracking error: " + err);
 
 		if (info.has_audio && !config.AUDIO)
-			return self.failure(Muggle('Audio is not allowed.'));
+			return this.failure(Muggle('Audio is not allowed.'));
 
 		// pretend it's a PNG for the next steps
-		var image = self.image;
+		const { image } = this;
 		image.video = image.ext.replace('.', '');
 		image.video_path = image.path;
 		image.path = info.still_path;
@@ -330,39 +329,38 @@ IU.verify_video = function (err, info) {
 		if (info.duration)
 			image.duration = info.duration;
 
-		self.verify_image();
+		this.verify_image();
 	});
 };
 
 IU.verify_image = function (err) {
 	if (err)
 		winston.error(err);
-	var image = this.image;
+	const { image } = this;
 	this.tagged_path = image.ext.replace('.', '') + ':' + image.path;
-	var checks = {
+	const checks = {
 		stat: fs.stat.bind(fs, image.video_path || image.path),
 		dims: identify.bind(null, this.tagged_path),
 	};
 	if (image.ext == '.png')
 		checks.apng = detect_APNG.bind(null, image.path);
 
-	var self = this;
-	async.parallel(checks, function (err, rs) {
+	async.parallel(checks, (err, rs) => {
 		if (err)
-			return self.failure(Muggle('Wrong image type.', err));
+			return this.failure(Muggle('Wrong image type.', err));
 		image.size = rs.stat.size;
 		image.dims = [rs.dims.width, rs.dims.height];
 		if (rs.apng)
 			image.apng = 1;
-		self.verified();
+		this.verified();
 	});
 };
 
 IU.verified = function () {
 	if (this.failed)
 		return;
-	var desc = this.image.video ? 'Video' : 'Image';
-	var w = this.image.dims[0], h = this.image.dims[1];
+	const desc = this.image.video ? 'Video' : 'Image';
+	const w = this.image.dims[0], h = this.image.dims[1];
 	if (!w || !h)
 		return this.failure(Muggle('Bad image dimensions.'));
 	if (config.IMAGE_PIXELS_MAX && w * h > config.IMAGE_PIXELS_MAX)
@@ -374,15 +372,14 @@ IU.verified = function () {
 	if (h > config.IMAGE_HEIGHT_MAX)
 		return this.failure(Muggle(desc+' is too tall.'));
 
-	var self = this;
-	perceptual_hash(this.tagged_path, this.image, function (err, hash) {
+	perceptual_hash(this.tagged_path, this.image, (err, hash) => {
 		if (err)
-			return self.failure(err);
-		self.image.hash = hash;
-		self.db.check_duplicate(hash, function (err) {
+			return this.failure(err);
+		this.image.hash = hash;
+		this.db.check_duplicate(hash, (err) => {
 			if (err)
-				return self.failure(err);
-			self.deduped();
+				return this.failure(err);
+			this.deduped();
 		});
 	});
 };
@@ -394,15 +391,15 @@ IU.fill_in_specs = function (specs, kind) {
 	this.image[kind + '_path'] = specs.dest;
 };
 
-IU.deduped = function (err) {
+IU.deduped = function () {
 	if (this.failed)
 		return;
-	var image = this.image;
-	var specs = get_thumb_specs(image, this.pinky, 1);
-	var w = image.dims[0], h = image.dims[1];
+	const { image } = this;
+	const specs = get_thumb_specs(image, this.pinky, 1);
+	const w = image.dims[0], h = image.dims[1];
 
 	/* Determine whether we really need a thumbnail */
-	var sp = image.spoiler;
+	let sp = image.spoiler;
 	if (!sp && image.size < 30*1024
 			&& ['.jpg', '.png'].indexOf(image.ext) >= 0
 			&& !image.apng && !image.video
@@ -417,22 +414,21 @@ IU.deduped = function (err) {
 	if (sp && config.SPOILER_IMAGES.trans.indexOf(sp) >= 0)
 		specs.comp = true;
 
-	var self = this;
 	if (specs.comp) {
 		this.status(specs.overlay ? 'Overlaying...' : 'Spoilering...');
-		var comp = composite_src(sp, this.pinky);
+		const comp = composite_src(sp, this.pinky);
 		image.comp_path = image.path + '_comp';
 		specs.compDims = specs.overlay ? specs.dims : specs.bound;
 		image.dims = [w, h].concat(specs.compDims);
 		specs.composite = comp;
 		specs.compDest = image.comp_path;
 		async.parallel([
-			self.resize_and_track.bind(self, specs, false),
-			self.resize_and_track.bind(self, specs, true),
-		], function (err) {
+			this.resize_and_track.bind(this, specs, false),
+			this.resize_and_track.bind(this, specs, true),
+		], (err) => {
 			if (err)
-				return self.failure(err);
-			self.got_nails();
+				return this.failure(err);
+			this.got_nails();
 		});
 	}
 	else {
@@ -440,14 +436,14 @@ IU.deduped = function (err) {
 		if (!sp)
 			this.status('Thumbnailing...');
 
-		self.resize_and_track(specs, false, function (err) {
+		this.resize_and_track(specs, false, (err) => {
 			if (err)
-				return self.failure(err);
+				return this.failure(err);
 
 			if (config.EXTRA_MID_THUMBNAILS)
-				self.middle_nail();
+				this.middle_nail();
 			else
-				self.got_nails();
+				this.got_nails();
 		});
 	}
 };
@@ -456,14 +452,13 @@ IU.middle_nail = function () {
 	if (this.failed)
 		return;
 
-	var specs = get_thumb_specs(this.image, this.pinky, 2);
+	const specs = get_thumb_specs(this.image, this.pinky, 2);
 	this.fill_in_specs(specs, 'mid');
 
-	var self = this;
-	this.resize_and_track(specs, false, function (err) {
+	this.resize_and_track(specs, false, (err) => {
 		if (err)
-			self.failure(err);
-		self.got_nails();
+			return this.failure(err);
+		this.got_nails();
 	});
 };
 
@@ -471,7 +466,7 @@ IU.got_nails = function () {
 	if (this.failed)
 		return;
 
-	var image = this.image;
+	const { image } = this;
 	if (image.video_path) {
 		// stop pretending this is just a still image
 		image.path = image.video_path;
@@ -479,10 +474,10 @@ IU.got_nails = function () {
 		delete image.video_path;
 	}
 
-	var time = Date.now();
+	const time = Date.now();
 	image.src = time + image.ext;
-	var base = path.basename;
-	var tmps = {src: base(image.path)};
+	const base = path.basename;
+	const tmps = {src: base(image.path)};
 
 	if (image.thumb_path) {
 		image.thumb = time + '.jpg';
@@ -502,13 +497,12 @@ IU.got_nails = function () {
 };
 
 function composite_src(spoiler, pinky) {
-	var file = 'spoiler' + (pinky ? 's' : '') + spoiler + '.png';
+	const file = `spoiler${pinky ? 's' : ''}${spoiler}.png`;
 	return path.join(config.SPOILER_DIR, file);
 }
 
 IU.read_image_filesize = function (callback) {
-	var self = this;
-	fs.stat(this.image.path, function (err, stat) {
+	fs.stat(this.image.path, (err, stat) => {
 		if (err)
 			callback(Muggle('Internal filesize error.', err));
 		else if (stat.size > config.IMAGE_FILESIZE_MAX)
@@ -519,7 +513,7 @@ IU.read_image_filesize = function (callback) {
 };
 
 function which(name, callback) {
-	child_process.exec('which ' + name, function (err, stdout, stderr) {
+	child_process.exec('which ' + name, (err, stdout, stderr) => {
 		if (err)
 			callback(err);
 		else
@@ -527,47 +521,49 @@ function which(name, callback) {
 	});
 }
 
+// STARTUP RACE
 /* Look up imagemagick paths */
-var identifyBin, convertBin;
+let identifyBin, convertBin;
 which('identify', function (err, bin) { if (err) throw err; identifyBin = bin; });
 which('convert', function (err, bin) { if (err) throw err; convertBin = bin; });
 
-var ffmpegBin;
+let ffmpegBin;
 if (config.VIDEO) {
 	which('ffmpeg', function (err, bin) { if (err) throw err; ffmpegBin = bin; });
 }
 
 /* optional JPEG auto-rotation */
-var jpegtranBin, jheadBin;
+let jpegtranBin, jheadBin;
 which('jpegtran', function (err, bin) { if (!err && bin) jpegtranBin = bin; });
 which('jhead', function (err, bin) { if (!err && bin) jheadBin = bin; });
 
 function identify(taggedName, callback) {
-	var m = taggedName.match(/^(\w{3,4}):/);
-	var args = ['-format', '%Wx%H', taggedName + '[0]'];
-	child_process.execFile(identifyBin, args, function (err,stdout,stderr){
+	const args = ['-format', '%Wx%H', taggedName + '[0]'];
+	child_process.execFile(identifyBin, args, (err, stdout, stderr) => {
 		if (err) {
-			var msg = "Bad image.";
+			let msg = "Bad image.";
 			if (stderr.match(/no such file/i))
 				msg = "Image went missing.";
 			else if (stderr.match(/improper image header/i)) {
-				var kind = m && m[1];
-				kind = kind ? 'a ' + kind.toUpperCase()
-						: 'an image';
-				msg = 'File is not ' + kind + '.';
+				const m = taggedName.match(/^(\w{3,4}):/);
+				let kind = m && m[1];
+				kind = kind ? 'a ' + kind.toUpperCase() : 'an image';
+				msg = `File is not ${kind}.`;
 			}
 			else if (stderr.match(/no decode delegate/i))
 				msg = "Unsupported file type.";
 			return callback(Muggle(msg, stderr));
 		}
 
-		var line = stdout.trim();
-		var m = line.match(/(\d+)x(\d+)/);
+		const line = stdout.trim();
+		const m = line.match(/(\d+)x(\d+)/);
 		if (!m)
 			callback(Muggle("Couldn't read image dimensions."));
-		else
-			callback(null, {width: parseInt(m[1], 10),
-					height: parseInt(m[2], 10)});
+		else {
+			const width = parseInt(m[1], 10);
+			const height = parseInt(m[2], 10);
+			callback(null, {width, height});
+		}
 	});
 }
 
@@ -579,10 +575,8 @@ function ConvertJob(args, src) {
 util.inherits(ConvertJob, jobs.Job);
 
 ConvertJob.prototype.perform_job = function () {
-	var self = this;
-	child_process.execFile(convertBin, this.args,
-				function (err, stdout, stderr) {
-		self.finish_job(err ? (stderr || err) : null);
+	child_process.execFile(convertBin, this.args, (err, stdout, stderr) => {
+		this.finish_job(err ? (stderr || err) : null);
 	});
 };
 
@@ -595,9 +589,8 @@ function convert(args, src, callback) {
 }
 
 function perceptual_hash(src, image, callback) {
-	var tmp = index.media_path('tmp',
-			'hash' + etc.random_id() + '.gray');
-	var args = [src + '[0]'];
+	const tmp = index.media_path('tmp', 'hash' + etc.random_id() + '.gray');
+	const args = [src + '[0]'];
 	if (image.dims.width > 1000 || image.dims.height > 1000)
 		args.push('-sample', '800x800');
 	// do you believe in magic?
@@ -605,21 +598,18 @@ function perceptual_hash(src, image, callback) {
 			'-scale', '16x16!',
 			'-type', 'grayscale', '-depth', '8',
 			tmp);
-	convert(args, src, function (err) {
+	convert(args, src, (err) => {
 		if (err)
 			return callback(Muggle('Hashing error.', err));
-		var bin = path.join(__dirname, 'perceptual');
-		child_process.execFile(bin, [tmp],
-					function (err, stdout, stderr) {
-			fs.unlink(tmp, function (err) {
+		const bin = path.join(__dirname, 'perceptual');
+		child_process.execFile(bin, [tmp], (err, stdout, stderr) => {
+			fs.unlink(tmp, err => {
 				if (err)
-					winston.warn("Deleting " +
-						tmp + ": " + err);
+					winston.warn(`Deleting ${tmp}: ${err}`);
 			});
 			if (err)
-				return callback(Muggle('Hashing error.',
-						stderr || err));
-			var hash = stdout.trim();
+				return callback(Muggle('Hashing error.', stderr || err));
+			const hash = stdout.trim();
 			if (hash.length != 64)
 				return callback(Muggle('Hashing problem.'));
 			callback(null, hash);
@@ -628,18 +618,16 @@ function perceptual_hash(src, image, callback) {
 }
 
 function detect_APNG(fnm, callback) {
-	var bin = path.join(__dirname, 'findapng');
-	child_process.execFile(bin, [fnm], function (err, stdout, stderr) {
+	const bin = path.join(__dirname, 'findapng');
+	child_process.execFile(bin, [fnm], (err, stdout, stderr) => {
 		if (err)
-			return callback(Muggle('APNG detector problem.',
-					stderr || err));
+			return callback(Muggle('APNG detector problem.', stderr || err));
 		else if (stdout.match(/^APNG/))
 			return callback(null, true);
 		else if (stdout.match(/^PNG/))
 			return callback(null, false);
 		else
-			return callback(Muggle('APNG detector acting up.',
-					stderr || err));
+			return callback(Muggle('APNG detector acting up.', stderr || err));
 	});
 }
 
@@ -660,13 +648,13 @@ function setup_image_params(o) {
 	o.quality += ''; // coerce to string
 }
 
-function build_im_args(o, args) {
+function build_im_args(o) {
 	// avoid OOM killer
-	var args = ['-limit', 'memory', '32', '-limit', 'map', '64'];
-	var dims = o.dims;
+	const args = ['-limit', 'memory', '32', '-limit', 'map', '64'];
+	const dims = o.dims;
 	// resample from twice the thumbnail size
 	// (avoid sampling from the entirety of enormous 6000x6000 images etc)
-	var samp = dims[0]*2 + 'x' + dims[1]*2;
+	const samp = dims[0]*2 + 'x' + dims[1]*2;
 	if (o.ext == '.jpg')
 		args.push('-define', 'jpeg:size=' + samp);
 	setup_image_params(o);
@@ -679,9 +667,9 @@ function build_im_args(o, args) {
 }
 
 function resize_image(o, comp, callback) {
-	var args = build_im_args(o);
-	var dims = comp ? o.compDims : o.flatDims;
-	var dest = comp ? o.compDest : o.dest;
+	const args = build_im_args(o);
+	const dims = comp ? o.compDims : o.flatDims;
+	const dest = comp ? o.compDest : o.dest;
 	// in the composite case, zoom to fit. otherwise, force new size
 	args.push('-resize', dims + (comp ? '^' : '!'));
 	// add background
@@ -695,7 +683,7 @@ function resize_image(o, comp, callback) {
 	// disregard metadata, acquire artifacts
 	args.push('-strip', '-quality', o.quality);
 	args.push(dest);
-	convert(args, o.src, function (err) {
+	convert(args, o.src, (err) => {
 		if (err) {
 			winston.warn(err);
 			callback(Muggle("Resizing error.", err));
@@ -706,22 +694,21 @@ function resize_image(o, comp, callback) {
 }
 
 IU.resize_and_track = function (o, comp, cb) {
-	var self = this;
-	resize_image(o, comp, function (err, fnm) {
+	resize_image(o, comp, (err, fnm) => {
 		if (err)
 			return cb(err);
 
 		// HACK: strip IM type tag
-		var m = /^\w{3,4}:(.+)$/.exec(fnm);
+		const m = /^\w{3,4}:(.+)$/.exec(fnm);
 		if (m)
 			fnm = m[1];
 
-		self.db.track_temporary(fnm, cb);
+		this.db.track_temporary(fnm, cb);
 	});
 };
 
 function image_files(image) {
-	var files = [];
+	const files = [];
 	if (image.path)
 		files.push(image.path);
 	if (image.thumb_path)
@@ -734,7 +721,7 @@ function image_files(image) {
 }
 
 IU.failure = function (err) {
-	var err_desc = 'Unknown image processing error.'
+	let err_desc = 'Unknown image processing error.'
 	if (err instanceof Muggle) {
 		err_desc = err.most_precise_error_message();
 		err = err.deepest_reason();
@@ -749,15 +736,14 @@ IU.failure = function (err) {
 		this.failed = true;
 	}
 	if (this.image) {
-		var files = image_files(this.image);
-		files.forEach(function (file) {
-			fs.unlink(file, function (err) {
+		const files = image_files(this.image);
+		for (let file of files) {
+			fs.unlink(file, err => {
 				if (err)
-					winston.warn("Deleting " +
-						file + ": " + err);
+					winston.warn(`Deleting ${file}: ${err}`);
 			});
-		});
-		this.db.lose_temporaries(files, function (err) {
+		}
+		this.db.lose_temporaries(files, err => {
 			if (err)
 				winston.warn("Tracking failure: " + err);
 		});
@@ -768,30 +754,28 @@ IU.failure = function (err) {
 IU.record_image = function (tmps) {
 	if (this.failed)
 		return;
-	var view = {};
-	var self = this;
-	index.image_attrs.forEach(function (key) {
-		if (key in self.image)
-			view[key] = self.image[key];
-	});
+	const view = {};
+	for (let key of index.image_attrs) {
+		if (key in this.image)
+			view[key] = this.image[key];
+	}
 	if (this.image.composite) {
 		view.realthumb = view.thumb;
 		view.thumb = this.image.composite;
 	}
 	view.pinky = this.pinky;
-	var image_id = etc.random_id().toFixed();
-	var alloc = {image: view, tmps: tmps};
-	this.db.record_image_alloc(image_id, alloc, function (err) {
+	const image_id = etc.random_id().toFixed();
+	const alloc = {image: view, tmps};
+	this.db.record_image_alloc(image_id, alloc, err => {
 		if (err)
 			return this.failure("Image storage failure.");
-		self.client_call('alloc', image_id);
-		self.db.disconnect();
-		self.respond(202, 'OK');
+		this.client_call('alloc', image_id);
+		this.db.disconnect();
+		this.respond(202, 'OK');
 
 		if (index.is_standalone()) {
-			var where = view.src;
-			var size = Math.ceil(view.size / 1000) + 'kb';
-			winston.info('upload: ' + where + ' ' + size);
+			const size = Math.ceil(view.size / 1000);
+			winston.info(`upload: ${view.src} ${size}kb`);
 		}
 	});
 };
