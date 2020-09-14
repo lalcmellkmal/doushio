@@ -4,6 +4,7 @@ var child_process = require('child_process'),
     winston = require('winston');
 
 exports.readFile = util.promisify(fs.readFile);
+exports.unlink = util.promisify(fs.unlink);
 
 /* Non-wizard-friendly error message */
 function Muggle(message, reason) {
@@ -48,21 +49,14 @@ exports.move = function (src, dest) {
 	});
 };
 
-/// no-clobber mv
-exports.movex = function (src, dest, callback) {
-	child_process.execFile('/bin/mv', ['-n', '--', src, dest],
-				function (err, stdout, stderr) {
-		if (err)
-			callback(Muggle("Couldn't move file into place.",
-					stderr || err));
-		else
-			callback(null);
-	});
-};
-
 exports.move_no_clobber = (src, dest) => {
 	return new Promise((resolve, reject) => {
-		exports.movex(src, dest, err => err ? reject(err) : resolve())
+		child_process.execFile('/bin/mv', ['-n', '--', src, dest], (err, stdout, stderr) => {
+			if (err)
+				reject(Muggle("Couldn't move file into place.", stderr || err));
+			else
+				resolve();
+		});
 	});
 };
 
