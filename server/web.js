@@ -1,4 +1,4 @@
-var _ = require('../lib/underscore'),
+const _ = require('../lib/underscore'),
     auth = require('./auth'),
     caps = require('./caps'),
     config = require('../config'),
@@ -8,17 +8,17 @@ var _ = require('../lib/underscore'),
     util = require('util'),
     winston = require('winston');
 
-var send;
+let send;
 if (config.SERVE_STATIC_FILES)
 	send = require('send');
 
-var escape = require('../common').escape_html;
-var routes = [];
-var resources = [];
+const escape = require('../common').escape_html;
+const routes = [];
+const resources = [];
 
-var server = require('http').createServer(function (req, resp) {
-	var ip = req.connection.remoteAddress;
-	var country;
+const server = require('http').createServer((req, resp) => {
+	let ip = req.connection.remoteAddress;
+	let country;
 	if (config.TRUST_X_FORWARDED_FOR)
 		ip = parse_forwarded_for(req.headers['x-forwarded-for']) || ip;
 	if (config.CLOUDFLARE) {
@@ -43,19 +43,20 @@ var server = require('http').createServer(function (req, resp) {
 exports.server = server;
 
 function handle_request(req, resp) {
-	var method = req.method.toLowerCase();
-	var parsed = url_parse(req.url, true);
-	req.url = parsed.pathname;
-	req.query = parsed.query;
+	const method = req.method.toLowerCase();
+	// chop the query string off of `req.url`
+	const { pathname, query } = url_parse(req.url, true);
+	req.url = pathname;
+	req.query = query;
 	req.cookies = parse_cookie(req.headers.cookie);
 
-	var numRoutes = routes.length;
-	for (var i = 0; i < numRoutes; i++) {
-		var route = routes[i];
+	// try the dynamic routes
+	for (let route of routes) {
 		if (method != route.method)
 			continue;
-		var m = req.url.match(route.pattern);
+		const m = req.url.match(route.pattern);
 		if (m) {
+			// dispatch this route!
 			route.handler(req, resp, m);
 			if (config.DEBUG)
 				winston.verbose(route.method.toUpperCase() + ' ' + req.url);
@@ -63,9 +64,10 @@ function handle_request(req, resp) {
 		}
 	}
 
+	// otherwise, try the resource-based handlers
 	if (method == 'get' || method == 'head')
-		for (var i = 0; i < resources.length; i++)
-			if (handle_resource(req, resp, resources[i]))
+		for (let resource of resources)
+			if (handle_resource(req, resp, resource))
 				return;
 
 	if (config.SERVE_IMAGES) {
@@ -77,26 +79,28 @@ function handle_request(req, resp) {
 		send(req, req.url, {root: 'www/'}).pipe(resp);
 		return;
 	}
+
+	// nothing worked
 	render_404(resp);
 	if (config.DEBUG)
-		winston.verbose('404 ' + req.url + ' fallthrough');
+		winston.verbose(`404 ${req.url} fallthrough`);
 }
 
 function handle_resource(req, resp, resource) {
-	var m = req.url.match(resource.pattern);
+	const m = req.url.match(resource.pattern);
 	if (!m)
 		return false;
-	var args = [req];
+	const args = [req];
 	if (resource.headParams)
 		args.push(m);
 	args.push(resource_second_handler.bind(null, req, resp, resource));
 
-	var cookie = auth.extract_login_cookie(req.cookies);
+	const cookie = auth.extract_login_cookie(req.cookies);
 	if (cookie) {
-		auth.check_cookie(cookie, function (err, ident) {
+		auth.check_cookie(cookie, (err, ident) => {
 			if (err && !resource.authPassthrough) {
 				if (config.DEBUG)
-					winston.verbose('DENY ' + req.url + ' ('  + err + ')');
+					winston.verbose(`DENY ${req.url} (${err})`);
 				return forbidden(resp, 'No cookie.');
 			}
 			else if (!err)
@@ -106,7 +110,7 @@ function handle_resource(req, resp, resource) {
 	}
 	else if (!resource.authPassthrough) {
 		if (config.DEBUG)
-			winston.verbose('DENY ' + req.url);
+			winston.verbose(`DENY ${req.url}`);
 		render_404(resp);
 	}
 	else
@@ -114,26 +118,28 @@ function handle_resource(req, resp, resource) {
 	return true;
 }
 
+// this is the callback passed to the first half of a web `resource`
+// it passes control to the second half of the resource
 function resource_second_handler(req, resp, resource, err, act, arg) {
-	var method = req.method.toLowerCase();
-	var log = config.DEBUG;
+	const method = req.method.toLowerCase();
+	const log = config.DEBUG;
 	if (err) {
 		if (err == 404) {
 			if (log)
-				winston.verbose('404 ' + req.url);
+				winston.verbose(`404 ${req.url}`);
 			return render_404(resp);
 		}
 		else if (err != 500)
 			winston.error(err);
 		else if (log)
-			winston.verbose('500 ' + req.url);
+			winston.verbose(`500 ${req.url}`);
 		return render_500(resp);
 	}
 	else if (act == 'ok') {
 		if (log)
-			winston.verbose(method.toUpperCase() + ' ' + req.url + ' 200');
+			winston.verbose(`${method.toUpperCase()} ${req.url} 200`);
 		if (method == 'head') {
-			var headers = (arg && arg.headers) || noCacheHeaders;
+			const headers = (arg && arg.headers) || noCacheHeaders;
 			resp.writeHead(200, headers);
 			resp.end();
 			if (resource.tear_down)
@@ -143,9 +149,7 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 			if (resource.tear_down) {
 				if (!arg)
 					arg = {};
-				arg.finished = function () {
-					resource.tear_down.call(arg);
-				};
+				arg.finished = () => resource.tear_down.call(arg);
 			}
 			resource.get.call(arg, req, resp);
 		}
@@ -154,14 +158,14 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 		resp.writeHead(304);
 		resp.end();
 		if (log)
-			winston.verbose('304 ' + req.url);
+			winston.verbose(`304 ${req.url}`);
 	}
 	else if (act == 'redirect' || (act >= 300 && act < 400)) {
-		var headers = {Location: arg};
+		const headers = {Location: arg};
 		if (act == 'redirect')
 			act = 303;
 		if (log)
-			winston.verbose(act + ' ' + req.url + ' to ' + arg);
+			winston.verbose(`${act} ${req.url} to ${arg}`);
 		if (act == 303.1) {
 			act = 303;
 			headers['X-Robots-Tag'] = 'nofollow';
@@ -171,7 +175,7 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 	}
 	else if (act == 'redirect_js') {
 		if (log)
-			winston.verbose('303.js ' + req.url + ' to ' + arg);
+			winston.verbose(`303.js ${req.url} to ${arg}`);
 		if (method == 'head') {
 			resp.writeHead(303, {Location: arg});
 			resp.end();
@@ -180,18 +184,18 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 			redirect_js(resp, arg);
 	}
 	else
-		throw new Error("Unknown resource handler: " + act);
+		throw new Error(`Unknown resource handler: ${act}`);
 }
 
 exports.route_get = function (pattern, handler) {
-	routes.push({method: 'get', pattern: pattern,
-			handler: auth_passthrough.bind(null, handler)});
+	handler = auth_passthrough.bind(null, handler);
+	routes.push({method: 'get', pattern, handler});
 };
 
 exports.resource = function (pattern, head, get, tear_down) {
 	if (head === true)
-		head = function (req, cb) { cb(null, 'ok'); };
-	var res = {pattern: pattern, head: head, authPassthrough: true};
+		head = (req, cb) => { cb(null, 'ok'); };
+	const res = {pattern, head, authPassthrough: true};
 	res.headParams = (head.length == 3);
 	if (get)
 		res.get = get;
@@ -202,8 +206,8 @@ exports.resource = function (pattern, head, get, tear_down) {
 
 exports.resource_auth = function (pattern, head, get, finished) {
 	if (head === true)
-		head = function (req, cb) { cb(null, 'ok'); };
-	var res = {pattern: pattern, head: head, authPassthrough: false};
+		head = (req, cb) => { cb(null, 'ok'); };
+	const res = {pattern, head, authPassthrough: false};
 	res.headParams = (head.length == 3);
 	if (get)
 		res.get = get;
@@ -215,10 +219,10 @@ exports.resource_auth = function (pattern, head, get, finished) {
 function parse_forwarded_for(ff) {
 	if (!ff)
 		return null;
-	var ips = ff.split(',');
+	const ips = ff.split(',');
 	if (!ips.length)
 		return null;
-	var last = ips[ips.length - 1].trim();
+	const last = ips[ips.length - 1].trim();
 	/* check that it looks like some kind of IPv4/v6 address */
 	if (!/^[\da-fA-F.:]{3,45}$/.test(last))
 		return null;
@@ -227,13 +231,13 @@ function parse_forwarded_for(ff) {
 exports.parse_forwarded_for = parse_forwarded_for;
 
 function auth_passthrough(handler, req, resp, params) {
-	var cookie = auth.extract_login_cookie(req.cookies);
+	const cookie = auth.extract_login_cookie(req.cookies);
 	if (!cookie) {
 		handler(req, resp, params);
 		return;
 	}
 
-	auth.check_cookie(cookie, function (err, ident) {
+	auth.check_cookie(cookie, (err, ident) => {
 		if (!err)
 			_.extend(req.ident, ident);
 		handler(req, resp, params);
@@ -247,11 +251,11 @@ exports.route_get_auth = function (pattern, handler) {
 
 function auth_checker(handler, is_post, req, resp, params) {
 	if (is_post) {
-		var form = new formidable.IncomingForm();
+		const form = new formidable.IncomingForm();
 		form.maxFieldsSize = 50 * 1024;
 		form.type = 'urlencoded';
 		try {
-			form.parse(req, function (err, fields) {
+			form.parse(req, (err, fields) => {
 				if (err) {
 					resp.writeHead(500, noCacheHeaders);
 					resp.end(preamble + escape(err));
@@ -270,19 +274,17 @@ function auth_checker(handler, is_post, req, resp, params) {
 		check_it();
 
 	function check_it() {
-		cookie = auth.extract_login_cookie(req.cookies);
+		const cookie = auth.extract_login_cookie(req.cookies);
 		if (!cookie)
 			return forbidden(resp, 'No cookie.');
-		auth.check_cookie(cookie, ack);
-	}
-
-	function ack(err, session) {
-		if (err)
-			return forbidden(resp, err);
-		if (is_post && session.csrf != req.body.csrf)
-			return forbidden(resp, "Possible CSRF.");
-		_.extend(req.ident, session);
-		handler(req, resp, params);
+		auth.check_cookie(cookie, (err, session) => {
+			if (err)
+				return forbidden(resp, err);
+			if (is_post && session.csrf != req.body.csrf)
+				return forbidden(resp, "Possible CSRF.");
+			_.extend(req.ident, session);
+			handler(req, resp, params);
+		});
 	}
 }
 
@@ -296,21 +298,21 @@ exports.route_post = function (pattern, handler) {
 	// (by the time the cookie check comes back, formidable can't
 	// catch the form data)
 	// We don't need the auth here anyway currently thanks to client_id
-	routes.push({method: 'post', pattern: pattern, handler: handler});
+	routes.push({method: 'post', pattern, handler});
 };
 
 exports.route_post_auth = function (pattern, handler) {
-	routes.push({method: 'post', pattern: pattern,
-			handler: auth_checker.bind(null, handler, true)});
+	handler = auth_checker.bind(null, handler, true);
+	routes.push({method: 'post', pattern, handler});
 };
 
-var noCacheHeaders = {'Content-Type': 'text/html; charset=UTF-8',
+const noCacheHeaders = {'Content-Type': 'text/html; charset=UTF-8',
 		'Expires': 'Thu, 01 Jan 1970 00:00:00 GMT',
 		'Cache-Control': 'no-cache, no-store',
 		'X-Frame-Options': 'sameorigin',
 		'X-XSS-Protection': '1',
 };
-var preamble = '<!doctype html><meta charset=utf-8>';
+const preamble = '<!doctype html><meta charset=utf-8>';
 
 exports.noCacheHeaders = noCacheHeaders;
 
@@ -335,10 +337,10 @@ function render_500(resp) {
 exports.render_500 = render_500;
 
 function slow_request(req, resp) {
-	var n = Math.floor(1000 + Math.random() * 500);
+	let n = Math.floor(1000 + Math.random() * 500);
 	if (Math.random() < 0.1)
 		n *= 10;
-	setTimeout(function () {
+	setTimeout(() => {
 		if (resp.finished)
 			return;
 		if (resp.socket && resp.socket.destroyed)
@@ -348,9 +350,9 @@ function slow_request(req, resp) {
 }
 
 function timeout(resp) {
-	var n = Math.random();
+	let n = Math.random();
 	n = Math.round(9000 + n*n*50000);
-	setTimeout(function () {
+	setTimeout(() => {
 		if (resp.socket && !resp.socket.destroyed)
 			resp.socket.destroy();
 		resp.end();
@@ -358,42 +360,48 @@ function timeout(resp) {
 }
 
 function redirect(resp, uri, code) {
-	var headers = {Location: uri};
-	for (var k in noCacheHeaders)
+	const headers = {Location: uri};
+	for (let k in noCacheHeaders)
 		headers[k] = noCacheHeaders[k];
 	resp.writeHead(code || 303, headers);
-	resp.end(preamble + '<title>Redirect</title>'
-		+ '<a href="' + encodeURI(uri) + '">Proceed</a>.');
+	resp.end(`${preamble}
+<title>Redirect</title>
+<a href="${encodeURI(uri)}" rel="noreferrer noopener">Proceed</a>.`);
 }
 exports.redirect = redirect;
 
-var redirectJsTmpl = require('fs').readFileSync('tmpl/redirect.html');
+const redirectJsTmpl = require('fs').readFileSync('tmpl/redirect.html');
 
 function redirect_js(resp, uri) {
 	resp.writeHead(200, noCacheHeaders);
-	resp.write(preamble + '<title>Redirecting...</title>');
-	resp.write('<script>var dest = "' + encodeURI(uri) + '";</script>');
-	resp.end(redirectJsTmpl);
+	resp.write(`${preamble}
+<title>Redirecting...</title>');
+<script>const dest = "${encodeURI(uri)}";</script>
+${redirectJsTmpl}`);
 }
 exports.redirect_js = redirect_js;
 
 exports.dump_server_error = function (resp, err) {
 	resp.writeHead(500, noCacheHeaders);
-	resp.write(preamble + '<title>Server error</title>\n<pre>');
-	resp.write(escape(util.inspect(err)));
-	resp.end('</pre>');
+	resp.write(`${preamble}
+<title>Server error</title>
+<pre>
+${escape(util.inspect(err))}
+</pre>
+`);
 };
 
 function parse_cookie(header) {
-	var chunks = {};
-	(header || '').split(';').forEach(function (part) {
-		var bits = part.match(/^([^=]*)=(.*)$/);
-		if (bits)
+	const chunks = {};
+	(header || '').split(';').forEach((part) => {
+		const bits = part.match(/^([^=]*)=(.*)$/);
+		if (bits) {
 			try {
-				chunks[bits[1].trim()] = decodeURIComponent(
-						bits[2].trim());
+				const [_0, k, v] = bits;
+				chunks[k.trim()] = decodeURIComponent(v.trim());
 			}
 			catch (e) {}
+		}
 	});
 	return chunks;
 }
@@ -401,11 +409,11 @@ exports.parse_cookie = parse_cookie;
 
 exports.prefers_json = function (accept) {
 	/* Not technically correct but whatever */
-	var mimes = (accept || '').split(',');
-	for (var i = 0; i < mimes.length; i++) {
-		if (/json/i.test(mimes[i]))
+	const mimes = (accept || '').split(',');
+	for (let mime of mimes) {
+		if (/json/i.test(mime))
 			return true;
-		else if (/(html|xml|plain|image)/i.test(mimes[i]))
+		else if (/(html|xml|plain|image)/i.test(mime))
 			return false;
 	}
 	return false;
@@ -428,7 +436,7 @@ function Debuff(stream) {
 }
 util.inherits(Debuff, Stream);
 
-var D = Debuff.prototype;
+const D = Debuff.prototype;
 
 D.writeHead = function () {
 	if (!this._check())
@@ -480,33 +488,33 @@ D._queue = function () {
 		return;
 	if (Math.random() < 0.05)
 		return;
-	var wait = 500 + Math.floor(Math.random() * 5000);
+	let wait = 500 + Math.floor(Math.random() * 5000);
 	if (Math.random() < 0.5)
 		wait *= 2;
 	this.timer = setTimeout(this._flush, wait);
 };
 
 D._flush = function () {
-	var limit = 500 + Math.floor(Math.random() * 1000);
+	let limit = 500 + Math.floor(Math.random() * 1000);
 	if (Math.random() < 0.05)
 		limit *= 3;
 
-	var count = 0;
+	let count = 0;
 	while (this.out.writable && this.buf.length && count < limit) {
-		var o = this.buf.shift();
+		let o = this.buf.shift();
 		if (o._head) {
 			this.out.writeHead.apply(this.out, o._head);
 			this.statusCode = this.out.statusCode;
 			continue;
 		}
-		var enc;
+		let enc;
 		if (o._enc && o._data) {
 			enc = o.enc;
 			o = o._data;
 		}
 		if (!o.length)
 			continue;
-		var n = limit - count;
+		const n = limit - count;
 		if (typeof o == 'string' && o.length > n) {
 			this.buf.unshift(o.slice(n));
 			o = o.slice(0, n);
