@@ -1,7 +1,7 @@
 <script>
-var hash = document.location.hash;
+const hash = document.location.hash;
 if (hash) {
-	var m = dest.match(/^(.*)#\d+$/);
+	const m = dest.match(/^(.*)#\d+$/);
 	dest = (m ? m[1] : dest) + hash;
 }
 document.location.replace(dest);

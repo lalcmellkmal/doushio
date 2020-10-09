@@ -12,12 +12,12 @@ $CONTENT
 <script src="{{MEDIA_URL}}js/jquery-1.10.2.min.js"></script>
 <script src="{{MEDIA_URL}}js/jquery-ui-1.8.16.min.js"></script>
 <script>
-var $del_button = $('<input type=button value=Delete>');
+const $del_button = $('<input type=button value=Delete>');
 
 function delete_selected() {
 	// fgsfds
-	var threads = [];
-	$('img.ui-selected').each(function () {
+	const threads = [];
+	$('img.ui-selected').each(() => {
 		threads.push(parseInt($(this).prop('alt')));
 	});
 	$del_button.val('Deleting ' + threads.length + '...');
@@ -25,10 +25,10 @@ function delete_selected() {
 		type: 'POST',
 		url: 'admin',
 		data: {threads: threads.join(), csrf: $CSRF},
-		success: function (data) {
+		success: (data) => {
 			$del_button.val('Deleted. Refresh.');
 		},
-		error: function (xhr, text, err) {
+		error: (xhr, text, err) => {
 			// TODO
 			alert(text);
 			$del_button.val('Failed.');
@@ -36,7 +36,7 @@ function delete_selected() {
 	});
 }
 
-$(document).ready(function () {
+$(document).ready(() => {
 	$('article').selectable();
 	$('body').append($del_button.click(delete_selected));
 });
