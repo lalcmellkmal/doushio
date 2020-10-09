@@ -22,7 +22,7 @@
 		"formidable": "1.0.17",
 		"ip": "1.1.5",
 		"minimist": "^1.2.5",
-		"node-fetch": "2.6.0",
+		"node-fetch": "2.6.1",
 		"recaptcha2": "1.3.3",
 		"redis": "2.8.0",
 		"sockjs": "0.3.20",
