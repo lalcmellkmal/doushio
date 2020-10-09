@@ -805,17 +805,21 @@ async function run_daemon() {
 			+ (cd.LISTEN_PORT + '.'));
 }
 
-if (require.main == module) (function () {
+if (require.main == module) (async () => {
 	if (!index.is_standalone())
 		throw new Error("Please enable DAEMON in imager/config.js");
 
-	var onegai = new imagerDb.Onegai;
-	onegai.delete_temporaries((err) => {
-		onegai.disconnect();
-		if (err)
-			throw err;
-		process.nextTick(() => {
-			run_daemon().catch(err => { winston.error(err); process.exit(1); });
-		});
+	{
+		const onegai = new imagerDb.Onegai;
+		try {
+			await onegai.delete_temporaries();
+		}
+		finally {
+			onegai.disconnect();
+		}
+	}
+
+	process.nextTick(() => {
+		run_daemon().catch(err => { winston.error(err); process.exit(1); });
 	});
 })();
