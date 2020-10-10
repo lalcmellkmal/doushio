@@ -42,8 +42,12 @@ function make_video(id, params, start) {
 window.make_video = make_video;
 
 function video_dims() {
-	if (window.screen && screen.width <= 320)
-		return {width: 250, height: 150};
+	if (window.screen && screen.width <= 700) {
+		// shrink to fit smol screens
+		const width = Math.round(screen.width * 0.8);
+		const height = Math.round(width / 1.6);
+		return {width, height};
+	}
 	else
 		return {width: 560, height: 340};
 }
