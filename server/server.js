@@ -647,58 +647,95 @@ function decrypt_ctoken(ctoken) {
 	return null;
 }
 
-var TWEET_CACHE = {};
-var TWEET_CACHE_LEN = 0;
+const TWEET_CACHE = new Map();
 const TWEET_CACHE_MAX = 100;
-const TWEET_CACHE_EXPIRY = 600*1000;
+const TWEET_CACHE_EXPIRY = 120*1000;
+const TWEET_IN_FLIGHT = new Map();
 
-function expire_tweet(key) {
-	if (TWEET_CACHE[key]) {
-		delete TWEET_CACHE[key];
-		TWEET_CACHE_LEN--;
+web.resource(/^\/outbound\/tweet\/(\w{1,15}\/status\/\d{4,20})$/, async (req, params, cb) => {
+	const url = new URL('https://publish.twitter.com/oembed');
+	{
+		const { s, theme } = req.query;
+		let tweet_url = 'https://twitter.com/' + params[1];
+		if (/^\d+$/.test(s))
+			tweet_url += `?s=${s}`;
+		url.searchParams.append('url', tweet_url);
+		url.searchParams.append('omit_script', 'true');
+		url.searchParams.append('theme', theme == 'dark' ? 'dark' : 'light');
 	}
-}
+	const key = 'tw:'+url;
 
-web.resource(/^\/outbound\/tweet\/(\w{1,15}\/status\/\d{4,20})$/,
-function (req, params, cb) {
-	let tweet_url = 'https://twitter.com/' + params[1];
-	if (/^\d+$/.test(req.query.s))
-		tweet_url += '?s=' + req.query.s;
-	let url = new URL('https://publish.twitter.com/oembed');
-	url.searchParams.append('url', tweet_url);
-	url.searchParams.append('omit_script', 'true');
-	url.searchParams.append('theme', req.query.theme == 'dark' ? 'dark' : 'light');
-	let key = 'tw:'+url;
-	if (TWEET_CACHE[key])
-		return cb(null, 'ok', TWEET_CACHE[key]);
+	// do we have a locally cached copy?
+	if (TWEET_CACHE.has(key)) {
+		const json = TWEET_CACHE.get(key);
+		return cb(null, 'ok', {json});
+	}
 
-	fetch(url).catch(cb).then(resp => {
+	// maybe a fetch is already pending?
+	if (TWEET_IN_FLIGHT.has(key)) {
+		const promise = TWEET_IN_FLIGHT.get(key);
+		try {
+			const json = await promise;
+			if (json) {
+				return cb(null, 'ok', {json});
+			}
+		}
+		catch (e) {
+			return cb(Muggle("Tweet was lost; try again.", e));
+		}
+		// shouldn't get here
+		return cb('tweet got lost on the way');
+	}
+
+	// kick off the twitter API request
+	const promise = (async () => {
+		const resp = await fetch(url);
 		if (!resp.ok) {
 			if (resp.status == 404)
-				cb(404);
+				throw 404;
 			else
-				cb('twitter returned ' + resp.statusText);
-			return;
+				throw Muggle('twitter returned ' + resp.statusText);
 		}
-		return resp.json();
-	}).then(json => {
+		const json = await resp.json();
 		if (!json.html)
-			return cb('unexpected tweet form');
+			throw Muggle('unexpected tweet form');
+		return json;
+	})();
 
-		if (!TWEET_CACHE[key] && TWEET_CACHE_LEN < TWEET_CACHE_MAX) {
-			TWEET_CACHE[key] = {json: json};
-			TWEET_CACHE_LEN++;
-			setTimeout(expire_tweet.bind(null, key), TWEET_CACHE_EXPIRY);
+	// mark this tweet as in-flight while we fetch it
+	TWEET_IN_FLIGHT.set(key, promise);
+
+	// and wait for the tweet to come back
+	let json;
+	try {
+		json = await promise;
+	}
+	catch (e) {
+		cb(e);
+		return;
+	}
+	finally {
+		TWEET_IN_FLIGHT.delete(key);
+	}
+
+	if (json) {
+		// cache the tweet if there's space
+		if (TWEET_CACHE.size < TWEET_CACHE_MAX) {
+			TWEET_CACHE.set(key, json);
+			setTimeout(() => TWEET_CACHE.delete(key), TWEET_CACHE_EXPIRY);
 		}
 
-		cb(null, 'ok', {json: json});
-	});
+		// pass the tweet json to the second handler
+		cb(null, 'ok', {json});
+	}
+
 }, function (req, resp) {
+	const { json } = this;
 	resp = write_gzip_head(req, resp, {
 		'Content-Type': 'application/json',
 		'Cache-Control': config.DEBUG ? 'no-cache' : 'public, max-age=600',
 	});
-	resp.end(JSON.stringify(this.json));
+	resp.end(JSON.stringify(json));
 });
 
 web.route_get_auth(/^\/dead\/(src|thumb|mid)\/(\w+\.\w{3})$/,
