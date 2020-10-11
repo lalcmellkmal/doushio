@@ -1,6 +1,5 @@
-const child_process = require('child_process'),
-	config = require('./config'),
-	etc = require('./etc'),
+const config = require('./config'),
+    etc = require('./etc'),
     fs = require('fs'),
     imagerConfig = require('./imager/config'),
     reportConfig = require('./report/config'),

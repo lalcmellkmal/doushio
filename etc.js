@@ -1,10 +1,13 @@
-var child_process = require('child_process'),
+const child_process = require('child_process'),
     fs = require('fs'),
     util = require('util'),
     winston = require('winston');
 
 exports.readFile = util.promisify(fs.readFile);
 exports.unlink = util.promisify(fs.unlink);
+
+exports.exec = util.promisify(child_process.exec);
+exports.execFile = util.promisify(child_process.execFile);
 
 /* Non-wizard-friendly error message */
 function Muggle(message, reason) {
@@ -38,49 +41,39 @@ Muggle.prototype.deepest_reason = function () {
 	return this;
 };
 
-exports.move = function (src, dest) {
-	return new Promise((resolve, reject) => {
-		child_process.execFile('/bin/mv', ['--', src, dest], (err, stdout, stderr) => {
-			if (err)
-				reject(Muggle("Couldn't move file into place.", stderr || err));
-			else
-				resolve();
-		});
-	});
+exports.move = async (src, dest) => {
+	try {
+		await exports.execFile('/bin/mv', ['--', src, dest]);
+	}
+	catch (err) {
+		throw Muggle("Couldn't move file into place.", err);
+	}
 };
 
-exports.move_no_clobber = (src, dest) => {
-	return new Promise((resolve, reject) => {
-		child_process.execFile('/bin/mv', ['-n', '--', src, dest], (err, stdout, stderr) => {
-			if (err)
-				reject(Muggle("Couldn't move file into place.", stderr || err));
-			else
-				resolve();
-		});
-	});
+exports.move_no_clobber = async (src, dest) => {
+	try {
+		await exports.execFile('/bin/mv', ['-n', '--', src, dest]);
+	}
+	catch (err) {
+		throw Muggle("Couldn't move file into place.", err);
+	}
 };
 
-exports.copy = function (src, dest) {
-	return new Promise((resolve, reject) => {
-
-	// try to do a graceful (non-overwriting) copy
-	child_process.execFile('/bin/cp', ['-n', '--', src, dest],
-				(err, stdout, stderr) => {
-		if (err) {
-			winston.warn(`overwriting (${src}) to (${dest}).`);
-			// just overwrite
-			child_process.execFile('/bin/cp', ['--', src, dest], (err, o, e) => {
-				if (err)
-					reject(Muggle("Couldn't copy file into place.", e || err));
-				else
-					resolve();
-			});
+exports.copy = async (src, dest) => {
+	try {
+		// try to do a graceful (non-overwriting) copy
+		await exports.execFile('/bin/cp', ['-n', '--', src, dest]);
+	}
+	catch (err) {
+		// overwrite, but whine about it
+		winston.warn(`overwriting (${src}) to (${dest}).`);
+		try {
+			await exports.execFile('/bin/cp', ['--', src, dest]);
 		}
-		else
-			resolve();
-	});
-
-	});
+		catch (err) {
+			throw Muggle("Couldn't copy file into place.", err);
+		}
+	}
 };
 
 exports.checked_mkdir = dir => {
