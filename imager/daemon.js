@@ -10,7 +10,6 @@ const async = require('async'),
     jobs = require('./jobs'),
     path = require('path'),
     urlParse = require('url').parse,
-    util = require('util'),
     winston = require('winston');
 
 const IMAGE_EXTS = ['.png', '.jpg', '.gif'];
@@ -176,51 +175,48 @@ IU.process = function () {
 		image.ext = '.jpg';
 	if (image.ext == '.mov')
 		image.ext = '.mp4';
-	if (IMAGE_EXTS.indexOf(image.ext) < 0
-			&& (!config.VIDEO || config.VIDEO_EXTS.indexOf(image.ext) < 0))
+	const { ext } = image;
+
+	const isVideoExt = config.VIDEO_EXTS.includes(ext);
+	if (!IMAGE_EXTS.includes(ext) && (!config.VIDEO || !isVideoExt))
 		return this.failure(Muggle('Invalid image format.'));
 	image.imgnm = filename.substr(0, 256);
 
 	this.status('Verifying...');
-	if (config.VIDEO_EXTS.indexOf(image.ext) >= 0)
-		video_still(image.path, image.ext, this.verify_video.bind(this));
-	else if (image.ext == '.jpg' && jpegtranBin && jheadBin)
+	if (isVideoExt)
+		jobs.schedule(new StillJob(image.path, ext), this.verify_video.bind(this));
+	else if (ext == '.jpg' && jpegtranBin && jheadBin)
 		jobs.schedule(new AutoRotateJob(image.path), this.verify_image.bind(this));
 	else
 		this.verify_image();
 };
 
-function AutoRotateJob(src) {
-	jobs.Job.call(this);
+class AutoRotateJob extends jobs.Job {
+constructor(src) {
+	super();
 	this.src = src;
 }
-util.inherits(AutoRotateJob, jobs.Job);
+toString() { return `[jhead+jpegtran auto rotation of ${this.src}`; }
 
-AutoRotateJob.prototype.describe_job = function () {
-	return "jhead+jpegtran auto rotation of " + this.src;
-};
-
-AutoRotateJob.prototype.perform_job = function () {
+perform_job() {
 	child_process.execFile(jheadBin, ['-autorot', this.src], (err, stdout, stderr) => {
 		// if it failed, keep calm and thumbnail on
 		if (err)
 			winston.warn('jhead: ' + (stderr || err));
-		this.finish_job(null);
+		this.finish_job();
 	});
-};
+}
+} // AutoRotateJob end
 
-function StillJob(src, ext) {
-	jobs.Job.call(this);
+class StillJob extends jobs.Job {
+constructor(src, ext) {
+	super();
 	this.src = src;
 	this.ext = ext;
 }
-util.inherits(StillJob, jobs.Job);
+toString() { return `[FFmpeg video still of ${this.src}]`; }
 
-StillJob.prototype.describe_job = function () {
-	return "FFmpeg video still of " + this.src;
-};
-
-StillJob.prototype.perform_job = function () {
+perform_job() {
 	const dest = index.media_path('tmp', 'still_'+etc.random_id());
 	const args = ['-hide_banner', '-loglevel', 'info',
 			'-i', this.src,
@@ -258,14 +254,14 @@ StillJob.prototype.perform_job = function () {
 			}
 			this.finish_job(null, {
 				still_path: dest,
-				has_audio: has_audio,
+				has_audio,
 				duration: dur,
 			});
 		});
 	});
-};
+}
 
-StillJob.prototype.test_format = function (first, full, cb) {
+test_format(first, full, cb) {
 	/* Could have false positives due to chapter titles. Bah. */
 	const has_audio = /stream\s*#0.*audio:/i.test(full);
 	/* Spoofable? */
@@ -299,10 +295,7 @@ StillJob.prototype.test_format = function (first, full, cb) {
 		cb('Unsupported video format.');
 	}
 }
-
-function video_still(src, ext, cb) {
-	jobs.schedule(new StillJob(src, ext), cb);
-}
+} // StillJob end
 
 IU.verify_video = function (err, info) {
 	if (err)
@@ -567,22 +560,21 @@ function identify(taggedName, callback) {
 	});
 }
 
-function ConvertJob(args, src) {
-	jobs.Job.call(this);
+class ConvertJob extends jobs.Job {
+constructor(args, src) {
+	super();
 	this.args = args;
 	this.src = src;
 }
-util.inherits(ConvertJob, jobs.Job);
 
-ConvertJob.prototype.perform_job = function () {
+perform_job() {
 	child_process.execFile(convertBin, this.args, (err, stdout, stderr) => {
 		this.finish_job(err ? (stderr || err) : null);
 	});
 };
 
-ConvertJob.prototype.describe_job = function () {
-	return "ImageMagick conversion of " + this.src;
-};
+toString() { return `[ImageMagick conversion of ${this.src}]`; }
+} // ConvertJob end
 
 function convert(args, src, callback) {
 	jobs.schedule(new ConvertJob(args, src), callback);
