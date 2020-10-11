@@ -198,13 +198,14 @@ constructor(src) {
 }
 toString() { return `[jhead+jpegtran auto rotation of ${this.src}`; }
 
-perform_job() {
-	child_process.execFile(jheadBin, ['-autorot', this.src], (err, stdout, stderr) => {
+async perform_job() {
+	try {
+		await etc.execFile(jheadBin, ['-autorot', this.src]);
+	}
+	catch (err) {
 		// if it failed, keep calm and thumbnail on
-		if (err)
-			winston.warn('jhead: ' + (stderr || err));
-		this.finish_job();
-	});
+		winston.warn('jhead: ' + (stderr || err));
+	}
 }
 } // AutoRotateJob end
 
@@ -216,18 +217,23 @@ constructor(src, ext) {
 }
 toString() { return `[FFmpeg video still of ${this.src}]`; }
 
-perform_job() {
+async perform_job() {
 	const dest = index.media_path('tmp', 'still_'+etc.random_id());
 	const args = ['-hide_banner', '-loglevel', 'info',
 			'-i', this.src,
 			'-f', 'image2', '-vf', 'thumbnail', '-vframes', '1', '-vcodec', 'png',
 			'-y', dest];
 	const opts = {env: {AV_LOG_FORCE_NOCOLOR: '1'}};
-	child_process.execFile(ffmpegBin, args, opts, (err, stdout, stderr) => {
-		const lines = stderr ? stderr.split('\n') : [];
+	let output;
+	try {
+		const { stderr } = await etc.execFile(ffmpegBin, args, opts);
+		output = stderr;
+	}
+	catch (err) {
+		const lines = err.stderr ? err.stderr.split('\n') : [];
 		const first = lines[0];
-		if (err) {
-			let msg;
+		let msg;
+		{
 			if (/no such file or directory/i.test(first))
 				msg = "Video went missing.";
 			else if (/invalid data found when/i.test(first))
@@ -238,30 +244,31 @@ perform_job() {
 				msg = "Unknown video reading error.";
 				winston.warn("Unknown ffmpeg output: "+first);
 			}
-			fs.unlink(dest, (_unlink_err) => {
-				// (ignore unlink error if any, it's just cleanup)
-				this.finish_job(Muggle(msg, stderr));
-			});
-			return;
 		}
+		try {
+			await etc.unlink(dest);
+		}
+		catch (e) { /* ignore unlink error if any, it's just cleanup */ }
+		throw Muggle(msg, err);
+	}
 
-		this.test_format(first, stderr, (format_err, has_audio, dur) => {
-			if (err) {
-				fs.unlink(dest, (_unlink_err) => {
-					this.finish_job(Muggle(format_err));
-				});
-				return;
-			}
-			this.finish_job(null, {
-				still_path: dest,
-				has_audio,
-				duration: dur,
-			});
-		});
-	});
+	// ok, parse the ffmpeg output
+	const lines = output ? output.split('\n') : [];
+	const first = lines[0];
+	try {
+		const { has_audio, duration } = this.test_format(first, output);
+		return { has_audio, duration, still_path: dest };
+	}
+	catch (err) {
+		try {
+			await etc.unlink(dest);
+		}
+		catch (e) { /* ignored */ }
+		throw err;
+	}
 }
 
-test_format(first, full, cb) {
+test_format(first, full) {
 	/* Could have false positives due to chapter titles. Bah. */
 	const has_audio = /stream\s*#0.*audio:/i.test(full);
 	/* Spoofable? */
@@ -269,7 +276,7 @@ test_format(first, full, cb) {
 	if (dur) {
 		const m = parseInt(dur[2], 10), s = parseInt(dur[3], 10);
 		if (dur[1] != '00' || m > 2)
-			return cb('Video exceeds 3 minutes.');
+			throw Muggle('Video exceeds 3 minutes.');
 		dur = (m ? m + 'm' : '') + s + 's';
 		if (dur == '0s')
 			dur = '1s';
@@ -279,20 +286,20 @@ test_format(first, full, cb) {
 	}
 
 	if (/stream #1/i.test(full))
-		return cb('Video contains more than one stream.');
+		throw Muggle('Video contains more than one stream.');
 
 	if (this.ext == '.webm') {
 		if (!/matroska,webm/i.test(first))
-			return cb('Video stream is not WebM.');
-		cb(null, has_audio, dur);
+			throw Muggle('Video stream is not WebM.');
+		return { has_audio, duration: dur };
 	}
 	else if (this.ext == '.mp4') {
 		if (!/mp4,/i.test(first))
-			return cb('Video stream is not mp4.');
-		cb(null, has_audio, dur);
+			throw Muggle('Video stream is not mp4.');
+		return { has_audio, duration: dur };
 	}
 	else {
-		cb('Unsupported video format.');
+		throw Muggle('Unsupported video format.');
 	}
 }
 } // StillJob end
@@ -567,10 +574,8 @@ constructor(args, src) {
 	this.src = src;
 }
 
-perform_job() {
-	child_process.execFile(convertBin, this.args, (err, stdout, stderr) => {
-		this.finish_job(err ? (stderr || err) : null);
-	});
+async perform_job() {
+	await etc.execFile(convertBin, this.args);
 };
 
 toString() { return `[ImageMagick conversion of ${this.src}]`; }

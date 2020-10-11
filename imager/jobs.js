@@ -42,24 +42,24 @@ start_job() {
 	}
 	JOBS_RUNNING++;
 	this.timeout = setTimeout(this.timeout_job.bind(this), JOB_TIMEOUT);
-	setTimeout(this.perform_job.bind(this), 0);
-}
+	setTimeout(async () => {
+		let err, result;
+		try {
+			result = await this.perform_job();
+		}
+		catch (e) {
+			err = e || 'unknown job error';
+		}
 
-finish_job(p1, p2) {
-	if (!this.running) {
-		winston.warn(`Attempted to finish stopped job: ${this}`);
-		return;
-	}
+		clearTimeout(this.timeout);
+		this.timeout = 0;
+		JOBS_RUNNING--;
+		if (JOBS_RUNNING < 0)
+			winston.warn(`Negative job count: ${JOBS_RUNNING}`);
 
-	clearTimeout(this.timeout);
-	this.timeout = 0;
-	JOBS_RUNNING--;
-	if (JOBS_RUNNING < 0)
-		winston.warn(`Negative job count: ${JOBS_RUNNING}`);
-
-	this.emit('finish', p1, p2);
-	// schedule the next job if any
-	schedule(null);
+		this.emit('finish', err, result);
+		schedule(null);
+	}, 0);
 }
 
 timeout_job() {
