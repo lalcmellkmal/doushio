@@ -1,6 +1,6 @@
-var optSpecs = [];
-var nashi = {opts: []}, inputMinSize = 300, fullWidthExpansion = false;
-var shortcutKeys = {};
+const optSpecs = [];
+let nashi = {opts: []}, inputMinSize = 300, fullWidthExpansion = false;
+const shortcutKeys = {};
 
 function extract_num(q) {
 	return parseInt(q.attr('id'), 10);
@@ -39,6 +39,7 @@ optSpecs.push(option_thumbs);
 optSpecs.push(option_autocomplete);
 optSpecs.push(option_backlinks);
 optSpecs.push(option_reply_at_right);
+optSpecs.push(option_only_upload_images);
 optSpecs.push(option_theme);
 optSpecs.push(option_last_n);
 
@@ -208,6 +209,20 @@ function option_reply_at_right(r) {
 option_reply_at_right.id = 'replyright';
 option_reply_at_right.label = '[Reply] at right';
 option_reply_at_right.type = 'checkbox';
+
+/* ONLY UPLOAD IMAGES */
+// for browsers that reject mime-types including both images and videos
+
+function option_only_upload_images(only_images) {
+	if (postForm && postForm.$imageInput) {
+		const accept = (imagerConfig.VIDEO && !only_images) ? 'image/*,video/*' : 'image/*';
+		postForm.$imageInput.prop('accept', accept);
+	}
+}
+option_only_upload_images.id = 'only-upload-images';
+option_only_upload_images.label = 'Only upload images';
+option_only_upload_images.type = 'checkbox';
+
 
 /* AUTOCOMPLETE */
 

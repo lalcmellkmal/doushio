@@ -873,7 +873,7 @@ make_upload_form: function () {
 		type: 'file', id: 'image', name: 'image',
 		change: $.proxy(this, 'on_image_chosen'),
 	};
-	opts.accept = imagerConfig.VIDEO ? 'image/*,video/*' : 'image/*';
+	opts.accept = (imagerConfig.VIDEO && !options.get('only-upload-images')) ? 'image/*,video/*' : 'image/*';
 	this.$imageInput = $('<input>', opts);
 	this.$toggle = $('<input>', {
 		type: 'button', id: 'toggle',
