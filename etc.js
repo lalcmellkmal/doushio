@@ -38,7 +38,7 @@ Muggle.prototype.most_precise_error_message = function () {
 Muggle.prototype.deepest_reason = function () {
 	if (this.reason && this.reason instanceof Muggle)
 		return this.reason.deepest_reason();
-	return this;
+	return this.reason || this;
 };
 
 exports.move = async (src, dest) => {
