@@ -32,7 +32,8 @@ function get_thumb_specs(image, pinky, scale) {
 	// Note: WebMs pretend to be PNGs at this step,
 	//       but those don't need transparent backgrounds.
 	//       (well... WebMs *can* have alpha channels...)
-	if (config.PNG_THUMBS && image.ext == '.png' && !image.video) {
+	const isPNG = image.ext === '.png' && !image.video;
+	if (config.PNG_THUMBS && (isPNG || image.ext == '.gif')) {
 		specs.format = 'png';
 		specs.quality = config.PNG_THUMB_QUALITY;
 	}
