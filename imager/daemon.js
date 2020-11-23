@@ -4,6 +4,7 @@ const config = require('./config'),
     { Muggle } = etc,
     imagerDb = require('./db'),
     index = require('./'),
+    { is_standalone } = index,
     formidable = require('formidable'),
     fs = require('fs'),
     jobs = require('./jobs'),
@@ -706,8 +707,7 @@ IU.failure = function (err) {
 		err_desc = err.most_precise_error_message();
 		err = err.deepest_reason();
 	}
-	/* Don't bother logging PEBKAC errors */
-	if (!(err instanceof Muggle))
+	if (is_standalone())
 		winston.error(err);
 
 	this.respond(500, err_desc);
@@ -755,7 +755,7 @@ IU.record_image = async function (tmps) {
 	this.db.disconnect();
 	this.respond(202, 'OK');
 
-	if (index.is_standalone()) {
+	if (is_standalone()) {
 		const size = Math.ceil(view.size / 1000);
 		winston.info(`upload: ${view.src} ${size}kb`);
 	}
@@ -787,7 +787,7 @@ async function run_daemon() {
 }
 
 if (require.main == module) (async () => {
-	if (!index.is_standalone())
+	if (!is_standalone())
 		throw new Error("Please enable DAEMON in imager/config.js");
 
 	{
