@@ -1,5 +1,4 @@
-const events = require('events'),
-    winston = require('winston');
+const winston = require('winston');
 
 // we only run one job at a time by default; thumbnailing is fast but can use a lot of RAM
 let JOB_LIMIT = 1;
@@ -10,27 +9,33 @@ let JOB_TIMEOUT = 30 * 1000;
 const JOB_QUEUE = [];
 let JOBS_RUNNING = 0;
 
-function schedule(job, cb) {
-	if (job && job.running)
-		winston.warn(`Job ${job} already running!`);
-	else if (job && JOB_QUEUE.includes(job))
-		winston.warn(`Job ${job} already scheduled!`);
-	else if (job) {
-		JOB_QUEUE.push(job);
-		if (cb) {
-			/* Sucks */
-			job.once('finish', cb);
-			job.once('timeout', () => cb("Timed out."));
-		}
+function schedule(job) {
+	if (job) {
+		if (job.running)
+			winston.warn(`Job ${job} already running!`);
+		else if (JOB_QUEUE.includes(job))
+			winston.warn(`Job ${job} already scheduled!`);
+		else
+			JOB_QUEUE.push(job);
 	}
 
 	while (JOB_QUEUE.length && JOBS_RUNNING < JOB_LIMIT)
 		JOB_QUEUE.shift().start_job();
+
+	if (job)
+		return job.promise;
 }
 exports.schedule = schedule;
 
 /// Subclasses must implement `perform_job` and should override `toString`.
-class Job extends events.EventEmitter {
+class Job {
+constructor() {
+	this.promise = new Promise((resolve, reject) => {
+		this.resolve = resolve;
+		this.reject = reject;
+	});
+}
+
 get running() {
 	return !!this.timeout;
 }
@@ -38,10 +43,9 @@ get running() {
 start_job() {
 	if (this.running) {
 		winston.warn(`${this} already started!`);
-		return;
+		return this.promise;
 	}
-	JOBS_RUNNING++;
-	this.timeout = setTimeout(this.timeout_job.bind(this), JOB_TIMEOUT);
+
 	setTimeout(async () => {
 		let err, result;
 		try {
@@ -57,9 +61,20 @@ start_job() {
 		if (JOBS_RUNNING < 0)
 			winston.warn(`Negative job count: ${JOBS_RUNNING}`);
 
-		this.emit('finish', err, result);
-		schedule(null);
+		setTimeout(schedule, 0);
+
+		const { resolve, reject } = this;
+		if (resolve) {
+			this.reject = this.resolve = null;
+			if (err)
+				reject(err);
+			else
+				resolve(result);
+		}
 	}, 0);
+	this.timeout = setTimeout(this.timeout_job.bind(this), JOB_TIMEOUT);
+	JOBS_RUNNING++;
+	return this.promise;
 }
 
 timeout_job() {
@@ -76,8 +91,13 @@ timeout_job() {
 	if (JOBS_RUNNING < 0)
 		winston.warn(`Negative job count: ${JOBS_RUNNING}`);
 
-	this.emit('timeout');
-	schedule(null);
+	setTimeout(schedule, 0);
+
+	const { reject } = this;
+	if (reject) {
+		this.reject = this.resolve = null;
+		reject(Muggle('Job timed out.'));
+	}
 }
 
 toString() { return '[anonymous Job]'; }

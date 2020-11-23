@@ -903,8 +903,11 @@ function allocate_post(msg, client, callback) {
 					client.ident),
 		};
 		if (image_alloc)
-			supplements.image = imager.obtain_image_alloc.bind(
-					null, image_alloc);
+			supplements.image = (cb) => {
+				imager.obtain_image_alloc(image_alloc)
+					.then(image => cb(null, image))
+					.catch(err => cb(err));
+			};
 		async.parallel(supplements, got_supplements);
 	}
 	function got_supplements(err, rs) {
@@ -1047,19 +1050,18 @@ dispatcher[common.DELETE_IMAGES] = caps.mod_handler((nums, client) => {
 dispatcher[common.INSERT_IMAGE] = function (msg, client) {
 	if (!check(['string'], msg))
 		return false;
-	var alloc = msg[0];
-	if (!client.post || client.post.image)
+	const [alloc] = msg;
+	const { post } = client;
+	if (!post || post.image)
 		return false;
-	imager.obtain_image_alloc(alloc, function (err, alloc) {
-		if (err)
-			return client.kotowaru(Muggle("Image lost.", err));
-		if (!client.post || client.post.image)
+	imager.obtain_image_alloc(alloc).catch(err => {
+		client.kotowaru(Muggle("Image lost.", err));
+	}).then(alloc => {
+		if (!post || post.image)
 			return;
-		client.db.add_image(client.post, alloc, client.ident.ip,
-					function (err) {
+		client.db.add_image(post, alloc, client.ident.ip, err => {
 			if (err)
-				client.kotowaru(Muggle(
-					"Image insertion problem.", err));
+				client.kotowaru(Muggle("Image insertion problem.", err));
 		});
 	});
 	return true;

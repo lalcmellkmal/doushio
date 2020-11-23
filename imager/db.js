@@ -40,47 +40,35 @@ O.connect = function () {
 
 O.disconnect = function () {};
 
-O.track_temporary = function (path, cb) {
+O.track_temporary = async function (path) {
 	const m = this.connect();
-	m.sadd('temps', path, (err, tracked) => {
-		if (err)
-			return cb(err);
-		if (tracked > 0) {
-			setTimeout(() => this.del_temp(path), (IMG_EXPIRY+1) * 1000);
-		}
-		cb(null);
-	});
+	const tracked = await m.promise.sadd('temps', path);
+	if (tracked > 0) {
+		setTimeout(() => this.del_temp(path), (IMG_EXPIRY+1) * 1000);
+	}
 };
 
-O.lose_temporaries = function (files, cb) {
-	this.connect().srem('temps', files, cb);
+O.lose_temporaries = async function (files) {
+	await this.connect().promise.srem('temps', files);
 };
 
-O.del_temp = function (path) {
-	this.cleanup_image_alloc(path, err => {
-		if (err) {
-			winston.warn(`unlink ${path}: ${err}`);
-		}
-	});
+O.del_temp = async function (path) {
+	try {
+		await this.cleanup_image_alloc(path);
+	}
+	catch (err) {
+		winston.warn(`unlink ${path}: ${err}`);
+	}
 };
 
 // if an image doesn't get used in a post in a timely fashion, delete it
-O.cleanup_image_alloc = function (path, cb) {
+O.cleanup_image_alloc = async function (path) {
 	const r = this.connect();
-	r.srem('temps', path, (err, n) => {
-		if (err)
-			return winston.warn(err);
-		if (n) {
-			fs.unlink(path, err => {
-				if (err)
-					return cb(err);
-				cb(null, true);
-			});
-		}
-		else {
-			cb(null, false); // wasn't found
-		}
-	});
+	const n = await r.promise.srem('temps', path);
+	if (n) {
+		await unlink(path);
+	}
+	return !!n;
 };
 
 // catch any dangling images on server startup
@@ -99,39 +87,32 @@ O.delete_temporaries = async function () {
 	await r.del('temps');
 };
 
-O.check_duplicate = function (hash, callback) {
-	this.connect().get('hash:'+hash, function (err, num) {
-		if (err)
-			callback(err);
-		else if (num)
-			callback(Muggle(`Duplicate of >>${num}.`));
-		else
-			callback(false);
-	});
+O.check_duplicate = async function (hash) {
+	const num = await this.connect().promise.get('hash:'+hash);
+	if (num)
+		throw Muggle(`Duplicate of >>${num}.`);
+	return false;
 };
 
-O.record_image_alloc = function (id, alloc, callback) {
+O.record_image_alloc = async function (id, alloc) {
 	const r = this.connect();
-	r.setex('image:' + id, IMG_EXPIRY, JSON.stringify(alloc), callback);
+	await r.promise.setex('image:' + id, IMG_EXPIRY, JSON.stringify(alloc));
 };
 
-O.obtain_image_alloc = function (id, callback) {
+O.obtain_image_alloc = async function (id) {
 	const m = this.connect().multi();
 	const key = 'image:' + id;
 	m.get(key);
 	m.setnx('lock:' + key, '1');
 	m.expire('lock:' + key, IMG_EXPIRY);
-	m.exec((err, rs) => {
-		if (err)
-			return callback(err);
-		if (rs[1] != 1)
-			return callback(Muggle("Image in use."));
-		if (!rs[0])
-			return callback(Muggle("Image lost."));
-		const alloc = JSON.parse(rs[0]);
-		alloc.id = id;
-		callback(null, alloc);
-	});
+	const [img, locked] = await m.promise.exec();
+	if (locked != 1)
+		throw Muggle("Image in use.");
+	if (!img)
+		throw Muggle("Image lost.");
+	const alloc = JSON.parse(img);
+	alloc.id = id;
+	return alloc;
 };
 
 exports.is_standalone = () => STANDALONE;

@@ -66,8 +66,7 @@ function validate_alloc(alloc) {
 	for (let dir in alloc.tmps) {
 		const fnm = alloc.tmps[dir];
 		if (!/^[\w_]+$/.test(fnm)) {
-			winston.warn("Suspicious filename: "
-					+ JSON.stringify(fnm));
+			winston.warn(`Suspicious filename: ${JSON.stringify(fnm)}`);
 			return;
 		}
 	}
@@ -152,18 +151,18 @@ exports.squish_MD5 = function (hash) {
 	return hash.toString('base64').replace(/\//g, '_').replace(/=*$/, '');
 };
 
-exports.obtain_image_alloc = function (id, cb) {
+exports.obtain_image_alloc = async function (id) {
 	const onegai = new db.Onegai;
-	onegai.obtain_image_alloc(id, function (err, alloc) {
-		onegai.disconnect();
-		if (err)
-			return cb(err);
-
+	try {
+		const alloc = await onegai.obtain_image_alloc(id);
 		if (validate_alloc(alloc))
-			cb(null, alloc);
+			return alloc;
 		else
-			cb("Invalid image alloc");
-	});
+			throw new etc.Muggle("Invalid image alloc");
+	}
+	finally {
+		onegai.disconnect();
+	}
 };
 
 exports.commit_image_alloc = async function (alloc) {
