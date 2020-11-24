@@ -374,7 +374,7 @@ const redirectJsTmpl = require('fs').readFileSync('tmpl/redirect.html');
 
 function redirect_js(resp, uri) {
 	resp.writeHead(200, noCacheHeaders);
-	resp.write(`${preamble}
+	resp.end(`${preamble}
 <title>Redirecting...</title>');
 <script>const dest = "${encodeURI(uri)}";</script>
 ${redirectJsTmpl}`);
