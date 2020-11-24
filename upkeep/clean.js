@@ -22,7 +22,7 @@ R.recycle_post = async function (post) {
 	if (!image || !image.src || post.hideimg)
 		return;
 	const r = this.y.connect();
-	const src = media_path('src', image.src);
+	let src = media_path('src', image.src);
 	const toDelete = [];
 	if (image.thumb) {
 		toDelete.push(src);
@@ -85,7 +85,7 @@ R.recycle_post = async function (post) {
 	}
 };
 
-R.recycle_thread = (op) => new Promise((resolve, reject) => {
+R.recycle_thread = function (op) { return new Promise((resolve, reject) => {
 	op = parseInt(op, 10);
 	const reader = new db.Reader(this.y);
 	reader.get_thread(this.tag, op, {});
@@ -109,7 +109,7 @@ R.recycle_thread = (op) => new Promise((resolve, reject) => {
 		});
 		reader.on('error', reject);
 	});
-});
+}) };
 
 R.recycle_archive = async function (cb) {
 	const { tag } = this;
@@ -121,7 +121,7 @@ R.recycle_archive = async function (cb) {
 	}
 };
 
-const MD5_file = (path) => new Promise((resolve, reject) => {
+function MD5_file(path) { return new Promise((resolve, reject) => {
 	const stream = fs.createReadStream(path);
 	const hash = crypto.createHash('md5');
 	stream.once('error', err => {
@@ -132,10 +132,10 @@ const MD5_file = (path) => new Promise((resolve, reject) => {
 	stream.once('end', () => {
 		stream.destroy();
 		/* grr stupid digest() won't give us a Buffer */
-		hash = Buffer.from(hash.digest('binary'), 'binary');
-		resolve(imager.squish_MD5(hash));
+		const buf = Buffer.from(hash.digest('binary'), 'binary');
+		resolve(squish_MD5(buf));
 	});
-});
+}) };
 
 if (require.main === module) process.nextTick(async () => {
 	const recycler = new Recycler;
