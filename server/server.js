@@ -212,10 +212,10 @@ function write_gzip_head(req, resp, headers) {
 
 function redirect_thread(cb, num, op, tag) {
 	if (!tag)
-		cb(null, 'redirect', op + '#' + num);
+		cb(null, 'redirect', `${op}#${num}`);
 	else
 		/* Use a JS redirect to preserve the hash */
-		cb(null, 'redirect_js', '../' + tag + '/' + op + '#' + num);
+		cb(null, 'redirect_js', `../${tag}/${op}#${num}`);
 }
 
 // unless imager.config.DAEMON, we deal with image uploads in-process.
@@ -565,26 +565,16 @@ web.resource(/^\/(\w+)\/(\d+)\/$/, function (req, params, cb) {
 		cb(null, 'redirect', '../' + params[2]);
 });
 
-web.resource(/^\/outbound\/(g|iqdb)\/([\w+\/]{22}\.jpg)$/,
-			function (req, params, cb) {
-	var thumb = imager.config.MEDIA_URL + 'vint/' + params[2];
+web.resource(/^\/outbound\/iqdb\/([\w+\/]{22}\.\w{3,4})$/, (req, params, cb) => {
+	let thumb = `${imager.config.MEDIA_URL}vint/${params[1]}`;
 
 	// attempt to make protocol more absolute
-	var u = urlParse(thumb, false, true);
+	const u = urlParse(thumb, false, true);
 	if (!u.protocol) {
 		u.protocol = 'http:';
 		thumb = u.format();
 	}
-
-	var service = params[1] == 'iqdb' ? 'http://iqdb.org/?url='
-			: 'https://www.google.com/searchbyimage?image_url=';
-	var dest = service + encodeURIComponent(thumb);
-	cb(null, 303.1, dest);
-});
-
-web.resource(/^\/outbound\/hash\/([\w+\/]{22})$/, function (req, params, cb) {
-	var dest = 'http://archive.foolz.us/_/search/image/' + escape(params[1]);
-	cb(null, 303.1, dest);
+	cb(null, 303.1, `https://iqdb.org?url=${encodeURIComponent(thumb)}`);
 });
 
 web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {

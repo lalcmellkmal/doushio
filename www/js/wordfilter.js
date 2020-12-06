@@ -24,7 +24,6 @@ ComposerView.prototype.word_filter = function (words) {
 			anime: 'ＴＶアニメ',
 			'4chan': '２ｃｈ',
 			april: '４月',
-			fools: 'foolz',
 			first: '＃１',
 			'1st': '＃１',
 			good: 'ＧＯＯＤ！',

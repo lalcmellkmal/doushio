@@ -628,23 +628,19 @@ OS.image_paths = function () {
 var audioIndicator = "\u266B"; // musical note
 
 OS.gazou = function (info, toppu) {
-	var src, name, caption, video;
+	let src, caption, video;
 	if (info.vint) {
-		src = encodeURI('../outbound/hash/' + info.MD5);
-		var google = encodeURI('../outbound/g/' + info.vint);
-		var iqdb = encodeURI('../outbound/iqdb/' + info.vint);
-		caption = ['Search ', new_tab_link(google, '[Google]'), ' ',
-			new_tab_link(iqdb, '[iqdb]'), ' ',
-			new_tab_link(src, '[foolz]')];
+		src = encodeURI('../outbound/iqdb/' + info.vint);
+		caption = ['Search ', new_tab_link(src, '[iqdb]')];
 	}
 	else {
 		src = encodeURI(this.image_paths().src + info.src);
-		video = info.video || (/\.webm$/i.test(src) && 'webm'); // webm check is legacy
+		video = info.video;
 		caption = [video ? 'Video ' : 'Image ', new_tab_link(src, info.src)];
 	}
 
-	var img = this.gazou_img(info, toppu);
-	var dims = info.dims[0] + 'x' + info.dims[1];
+	const img = this.gazou_img(info, toppu);
+	const dims = `${info.dims[0]}x${info.dims[1]}`;
 
 	return [safe('<figure data-MD5="'), info.MD5,
 		safe('" data-size="'), info.size,
@@ -680,7 +676,7 @@ OS.gazou_img = function (info, toppu) {
 	else if (info.vint) {
 		tw = tw || w;
 		th = th || h;
-		src = encodeURI('../outbound/hash/' + info.MD5);
+		src = encodeURI(`../outbound/iqdb/${info.vint}`);
 		thumb = imgPaths.vint + info.vint;
 	}
 	else if (this.thumbStyle != 'small' && info.mid) {
