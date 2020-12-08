@@ -13,7 +13,7 @@ function make_video(id, params, start) {
 	if (!params)
 		params = {allowFullScreen: 'true'};
 	params.allowScriptAccess = 'always';
-	var query = {
+	const query = {
 		autohide: 1,
 		fs: 1,
 		modestbranding: 1,
@@ -30,10 +30,10 @@ function make_video(id, params, start) {
 		query.playlist = id;
 	}
 
-	var uri = encodeURI('https://www.youtube.com/embed/' + id) + '?' +
-			$.param(query);
+	const src = encodeURI(`https://www.youtube.com/embed/${id}`) + '?' + $.param(query);
 	return $('<iframe></iframe>', {
-		type: 'text/html', src: uri,
+		type: 'text/html',
+		src,
 		frameborder: '0',
 		attr: video_dims(),
 		"class": 'youtube-player',
@@ -52,16 +52,16 @@ function video_dims() {
 		return {width: 560, height: 340};
 }
 
-$DOC.on('click', '.watch', function (e) {
+$DOC.on('click', '.watch', e => {
 	if (e.which > 1 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
 		return;
-	var $target = $(e.target);
+	const $target = $(e.target);
 
 	/* maybe squash that double-play bug? ugh, really */
 	if (!$target.is('a'))
 		return;
 
-	var $video = $target.find('iframe');
+	const $video = $target.find('iframe');
 	if ($video.length) {
 		$video.siblings('br').andSelf().remove();
 		$target.css('width', 'auto');
@@ -87,25 +87,25 @@ $DOC.on('click', '.watch', function (e) {
 		}
 	}
 
-	var $obj = make_video(m[2], null, start);
-	with_dom(function () {
+	const $obj = make_video(m[2], null, start);
+	with_dom(() => {
 		$target.css('width', video_dims().width).append('<br>', $obj);
 	});
 	return false;
 });
 
-$DOC.on('mouseenter', '.watch', function (event) {
-	var $target = $(event.target);
+$DOC.on('mouseenter', '.watch', event => {
+	const $target = $(event.target);
 	if ($target.data('requestedTitle'))
 		return;
 	$target.data('requestedTitle', true);
 	/* Edit textNode in place so that we don't mess with the embed */
-	var node = text_child($target);
+	const node = text_child($target);
 	if (!node)
 		return;
-	var orig = node.textContent;
-	with_dom(function () {
-		node.textContent = orig + '...';
+	const orig = node.textContent;
+	with_dom(() => {
+		node.textContent = `${orig}...`;
 	});
 	const m = $target.attr('href').match(youtube_url_re);
 	if (!m)
@@ -116,30 +116,23 @@ $DOC.on('mouseenter', '.watch', function (event) {
 		data: {id: m[2],
 		       key: config.GOOGLE_API_KEY,
 		       part: 'snippet,status',
-		       fields: 'items(snippet(title),status(embeddable))'},
+		       fields: 'items(snippet(title),status(embeddable))',
+		},
 		dataType: 'json',
-		success: function (data) {
-			with_dom(gotInfo.bind(null, data));
-		},
-		error: function () {
-			with_dom(function () {
-				node.textContent = orig + '???';
-			});
-		},
+		success: data => with_dom(() => gotInfo(data)),
+		error: () => with_dom(() => {node.textContent = `${orig}???`;}),
 	});
 
 	function gotInfo(data) {
-		var title = data && data.items && data.items[0].snippet &&
-				data.items[0].snippet.title;
+		const title = data && data.items && data.items[0].snippet && data.items[0].snippet.title;
 		if (title) {
-			node.textContent = orig + ': ' + title;
+			node.textContent = `${orig}: ${title}`;
 			$target.css({color: 'black'});
 		}
 		else
-			node.textContent = orig + ' (gone?)';
+			node.textContent = `${orig} (gone?)`;
 
-		if (data && data.items && data.items[0].status &&
-			data.items[0].status.embeddable == false) {
+		if (data && data.items && data.items[0].status && data.items[0].status.embeddable == false) {
 			node.textContent += ' (EMBEDDING DISABLED)';
 			$target.data('noembed', true);
 		}
