@@ -150,59 +150,59 @@ function text_child($target) {
 window.soundcloud_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.)?soundcloud\.com\/([\w-]{1,40}\/[\w-]{1,80})\/?/;
 
 function make_soundcloud(path, dims) {
-	var query = {
-		url: 'http://soundcloud.com/' + path,
+	const query = {
+		url: `http://soundcloud.com/${path}`,
 		color: 'ffaa66',
 		auto_play: false,
 		show_user: false,
 		show_comments: false,
 	};
-	var uri = 'https://w.soundcloud.com/player/?' + $.param(query);
+	const src = 'https://w.soundcloud.com/player/?' + $.param(query);
 	return $('<iframe></iframe>', {
-		src: uri, width: dims.width, height: dims.height,
+		src, width: dims.width, height: dims.height,
 		scrolling: 'no', frameborder: 'no',
 	});
 }
 
-$DOC.on('click', '.soundcloud', function (e) {
+$DOC.on('click', '.soundcloud', e => {
 	if (e.which > 1 || e.ctrlKey || e.altKey || e.shiftKey || e.metaKey)
 		return;
-	var $target = $(e.target);
+	const $target = $(e.target);
 
-	var $obj = $target.find('iframe');
-	if ($obj.length) {
-		$obj.siblings('br').andSelf().remove();
+	const $frame = $target.find('iframe');
+	if ($frame.length) {
+		$frame.siblings('br').andSelf().remove();
 		$target.css('width', 'auto');
 		return false;
 	}
-	var m = $target.attr('href').match(soundcloud_url_re);
+	const m = $target.attr('href').match(soundcloud_url_re);
 	if (!m) {
 		/* Shouldn't happen, but degrade to normal click action */
 		return;
 	}
-	var width = Math.round($(window).innerWidth() * 0.75);
-	var $obj = make_soundcloud(m[1], {width: width, height: 166});
-	with_dom(function () {
+	const width = Math.round($(window).innerWidth() * 0.75);
+	const $obj = make_soundcloud(m[1], {width, height: 166});
+	with_dom(() => {
 		$target.css('width', width).append('<br>', $obj);
 	});
 	return false;
 });
 
 /* lol copy pasta */
-$DOC.on('mouseenter', '.soundcloud', function (event) {
-	var $target = $(event.target);
+$DOC.on('mouseenter', '.soundcloud', event => {
+	const $target = $(event.target);
 	if ($target.data('requestedTitle'))
 		return;
 	$target.data('requestedTitle', true);
 	/* Edit textNode in place so that we don't mess with the embed */
-	var node = text_child($target);
+	const node = text_child($target);
 	if (!node)
 		return;
-	var orig = node.textContent;
-	with_dom(function () {
-		node.textContent = orig + '...';
+	const orig = node.textContent;
+	with_dom(() => {
+		node.textContent = `${orig}...`;
 	});
-	var m = $target.attr('href').match(soundcloud_url_re);
+	const m = $target.attr('href').match(soundcloud_url_re);
 	if (!m)
 		return;
 
@@ -210,24 +210,18 @@ $DOC.on('mouseenter', '.soundcloud', function (event) {
 		url: '//soundcloud.com/oembed',
 		data: {format: 'json', url: 'http://soundcloud.com/' + m[1]},
 		dataType: 'json',
-		success: function (data) {
-			with_dom(gotInfo.bind(null, data));
-		},
-		error: function () {
-			with_dom(function () {
-				node.textContent = orig + '???';
-			});
-		},
+		success: data => with_dom(() => gotInfo(data)),
+		error: () => with_dom(() => {node.textContent = `${orig}???`;}),
 	});
 
 	function gotInfo(data) {
-		var title = data && data.title;
+		const title = data && data.title;
 		if (title) {
-			node.textContent = orig + ': ' + title;
+			node.textContent = `${orig}: ${title}`;
 			$target.css({color: 'black'});
 		}
 		else
-			node.textContent = orig + ' (gone?)';
+			node.textContent = `${orig} (gone?)`;
 	}
 });
 
