@@ -112,8 +112,10 @@ async function make_minified(files, out) {
 	if (!src || !src.length)
 		throw new Error('make_minified: no client JS was generated');
 	const UglifyJS = require('uglify-es');
-	let ugly = UglifyJS.minify(src, {mangle: false});
+	const ugly = UglifyJS.minify(src, {mangle: false});
 	await new Promise((resolve, reject) => {
+		if (ugly.error)
+			throw ugly.error;
 		out.write(ugly.code, err => (err ? reject(err) : resolve()));
 	});
 }
