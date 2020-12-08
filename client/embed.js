@@ -4,8 +4,8 @@
 // https://m.youtube.com/watch/?v=abcdefghijk&t=2m
 // youtube.com/watch/?foo=bar&v=abcdefghijk#t=5h2s
 // >>>youtu.be/abcdefghijk
-var youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m.)?(?:youtu\.be\/|youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=)([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?([#\?]t=[\dhms]{1,9})?/;
-var youtube_time_re = /^[#\?]t=(?:(\d\d?)h)?(?:(\d{1,3})m)?(?:(\d{1,3})s)?$/;
+const youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m.)?(?:youtu\.be\/|youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=)([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?([#\?]t=[\dhms]{1,9})?/;
+const youtube_time_re = /^[#\?]t=(?:(\d\d?)h)?(?:(\d{1,3})m)?(?:(\d{1,3})s?)?$/;
 
 (function () {
 
@@ -69,14 +69,14 @@ $DOC.on('click', '.watch', function (e) {
 	}
 	if ($target.data('noembed'))
 		return;
-	var m = $target.attr('href').match(youtube_url_re);
+	const m = $target.attr('href').match(youtube_url_re);
 	if (!m) {
 		/* Shouldn't happen, but degrade to normal click action */
 		return;
 	}
-	var start = 0;
+	let start = 0;
 	if (m[4]) {
-		var t = m[4].match(youtube_time_re);
+		const t = m[4].match(youtube_time_re);
 		if (t) {
 			if (t[1])
 				start += parseInt(t[1], 10) * 3600;
@@ -107,7 +107,7 @@ $DOC.on('mouseenter', '.watch', function (event) {
 	with_dom(function () {
 		node.textContent = orig + '...';
 	});
-	var m = $target.attr('href').match(youtube_url_re);
+	const m = $target.attr('href').match(youtube_url_re);
 	if (!m)
 		return;
 
