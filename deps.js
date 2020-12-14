@@ -45,7 +45,6 @@ exports.SERVER_DEPS = [
 	'etc.js',
 	'make_client.js',
 	'pipeline.js',
-	'tail.js',
 	'curfew/server.js',
 	'lib/underscore.js',
 	'lua/finish.lua',
