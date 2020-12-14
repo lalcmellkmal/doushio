@@ -8,7 +8,6 @@ const _ = require('./lib/underscore'),
     fs = require('fs'),
     ipUtils = require('ip'),
     Muggle = require('./etc').Muggle,
-    tail = require('./tail'),
     util = require('util'),
     winston = require('winston');
 
@@ -960,48 +959,34 @@ Y.hide_image = async function (key) {
 	await imager.bury_image(image);
 };
 
-Y.force_image_spoilers = function (nums, callback) {
+Y.force_image_spoilers = async function (nums) {
 	if (this.ident.readOnly)
-		return callback(Muggle("Read-only right now."));
-	let threads = {};
-	let rem = this.spoiler_image.bind(this, threads);
-	tail.forEach(nums, rem, err => {
-		if (err)
-			return callback(err);
-		const m = this.connect().multi();
-		for (let op in threads)
-			this._log(m, op, common.SPOILER_IMAGES, threads[op], {tags: tags_of(op)});
-		m.exec(callback);
-	});
-};
-
-Y.spoiler_image = function (threads, num, callback) {
-	if (this.ident.readOnly)
-		return callback(Muggle("Read-only right now."));
+		throw Muggle("Read-only right now.");
 	const r = this.connect();
-	const op = OPs[num];
-	if (!op)
-		callback(null, false);
-	const key = (op == num ? 'thread:' : 'post:') + num;
-	const spoilerKeys = ['src', 'spoiler', 'realthumb'];
-	r.hmget(key, spoilerKeys, (err, info) => {
-		if (err)
-			return callback(err);
-		/* no image or already spoilt */
+	const threads = new Map();
+	for (let num of nums) {
+		const op = OPs[num];
+		if (!op)
+			continue;
+		const key = (op == num ? 'thread:' : 'post:') + num;
+		const spoilerKeys = ['src', 'spoiler', 'realthumb'];
+		const info = await r.promise.hmget(key, spoilerKeys);
 		if (!info[0] || info[1] || info[2])
-			return callback(null);
-		const index = common.pick_spoiler(-1).index;
-		r.hmset(key, 'spoiler', index, err => {
-			if (err)
-				return callback(err);
+			continue; // no image or already spoilt
 
-			if (threads[op])
-				threads[op].push([num, index]);
-			else
-				threads[op] = [[num, index]];
-			callback(null);
-		});
-	});
+		const index = common.pick_spoiler(-1).index;
+		await r.promise.hmset(key, 'spoiler', index);
+		if (threads.has(op))
+			threads.get(op).push([num, index]);
+		else
+			threads.set(op, [[num, index]]);
+	}
+	const m = r.multi();
+	for (let [op, result] of threads) {
+		const tags = tags_of(op);
+		this._log(m, op, common.SPOILER_IMAGES, result, {tags});
+	}
+	await m.promise.exec();
 };
 
 Y.toggle_thread_lock = function (op, callback) {

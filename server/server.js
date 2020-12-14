@@ -788,7 +788,7 @@ dispatcher[common.INSERT_POST] = function (msg, client) {
 function inactive_board_check(client) {
 	if (caps.can_administrate(client.ident))
 		return true;
-	return ['graveyard', 'archive'].indexOf(client.board) == -1;
+	return !['graveyard', 'archive'].includes(client.board);
 }
 
 function allocate_post(msg, client, callback) {
@@ -1057,14 +1057,15 @@ dispatcher[common.INSERT_IMAGE] = function (msg, client) {
 	return true;
 };
 
-dispatcher[common.SPOILER_IMAGES] = caps.mod_handler(function (nums, client) {
-	if (!inactive_board_check(client))
-		return client.kotowaru(Muggle("Couldn't spoiler images."));
-	client.db.force_image_spoilers(nums, function (err) {
-		if (err)
-			client.kotowaru(Muggle("Couldn't spoiler images.",
-					err));
-	});
+dispatcher[common.SPOILER_IMAGES] = caps.mod_handler(async (nums, client) => {
+	try {
+		if (!inactive_board_check(client))
+			throw new Error("Can't modify that board.");
+		await client.db.force_image_spoilers(nums);
+	}
+	catch (err) {
+		client.kotowaru(Muggle("Couldn't spoiler images.", err));
+	}
 });
 
 dispatcher[common.EXECUTE_JS] = function (msg, client) {
