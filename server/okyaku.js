@@ -1,4 +1,4 @@
-var caps = require('./caps'),
+const caps = require('./caps'),
     common = require('../common'),
     events = require('events'),
     Muggle = require('../etc').Muggle,
@@ -6,7 +6,7 @@ var caps = require('./caps'),
     util = require('util'),
     winston = require('winston');
 
-var dispatcher = exports.dispatcher = {};
+const dispatcher = exports.dispatcher = {};
 
 function Okyaku(socket, ip, country) {
 	events.EventEmitter.call(this);
@@ -17,7 +17,7 @@ function Okyaku(socket, ip, country) {
 	this.ip = ip;
 	this.country = country;
 
-	var clients = STATE.clientsByIP[ip];
+	let clients = STATE.clientsByIP[ip];
 	if (clients)
 		clients.push(this);
 	else
@@ -27,7 +27,7 @@ function Okyaku(socket, ip, country) {
 util.inherits(Okyaku, events.EventEmitter);
 exports.Okyaku = Okyaku;
 
-var OK = Okyaku.prototype;
+const OK = Okyaku.prototype;
 
 OK.send = function (msg) {
 	this.socket.write(JSON.stringify([msg]));
@@ -36,8 +36,8 @@ OK.send = function (msg) {
 OK.on_update = function (op, kind, msg) {
 	// Special cases for operations that overwrite a client's state
 	if (this.post && kind == common.DELETE_POSTS) {
-		var nums = JSON.parse(msg)[0].slice(2);
-		if (nums.indexOf(this.post.num) >= 0)
+		const nums = JSON.parse(msg)[0].slice(2);
+		if (nums.includes(this.post.num))
 			this.post = null;
 	}
 	else if (this.post && kind == common.DELETE_THREAD) {
@@ -45,7 +45,7 @@ OK.on_update = function (op, kind, msg) {
 			this.post = null;
 	}
 
-	if (this.blackhole && HOLED_UPDATES.indexOf(kind) >= 0)
+	if (this.blackhole && HOLED_UPDATES.includes(kind))
 		return;
 	this.socket.write(msg);
 };
@@ -60,10 +60,10 @@ OK.on_thread_sink = function (thread, err) {
 const WORMHOLES = [common.SYNCHRONIZE, common.FINISH_POST];
 
 OK.on_message = function (data) {
-	var msg;
+	let msg;
 	try { msg = JSON.parse(data); }
 	catch (e) {}
-	var type = common.INVALID;
+	let type = common.INVALID;
 	if (msg) {
 		if (this.post && typeof msg == 'string')
 			type = common.UPDATE_POST;
@@ -72,36 +72,37 @@ OK.on_message = function (data) {
 	}
 	if (!this.synced && type != common.SYNCHRONIZE)
 		type = common.INVALID;
-	if (this.blackhole && WORMHOLES.indexOf(type) < 0)
+	if (this.blackhole && !WORMHOLES.includes(type))
 		return;
-	var func = dispatcher[type];
+	const func = dispatcher[type];
 	if (!func || !func(msg, this)) {
-		this.kotowaru(Muggle("Bad protocol.", new Error(
-				"Invalid message: " + JSON.stringify(data))));
+		// TODO: handle properly if `func` returns a promise
+		const error = new Error(`Invalid message: ${JSON.stringify(data)}`);
+		this.kotowaru(Muggle("Bad protocol.", error));
 	}
 };
 
-var ip_expiries = {};
+const ip_expiries = new Map;
 
 OK.on_close = function () {
-	var ip = this.ip;
-	var clientList = STATE.clientsByIP[ip];
+	const { ip } = this;
+	const clientList = STATE.clientsByIP[ip];
 	if (clientList) {
-		var i = clientList.indexOf(this);
+		const i = clientList.indexOf(this);
 		if (i >= 0) {
 			clientList.splice(i, 1);
-			STATE.emitter.emit('change:clientsByIP',ip,clientList);
+			STATE.emitter.emit('change:clientsByIP', ip, clientList);
 		}
 		if (!clientList.length) {
 			// Expire this list after a short delay
-			if (ip_expiries[ip])
-				clearTimeout(ip_expiries[ip]);
-			ip_expiries[ip] = setTimeout(function () {
-				var list = STATE.clientsByIP[ip];
+			if (ip_expiries.has(ip))
+				clearTimeout(ip_expiries.get(ip));
+			ip_expiries.set(ip, setTimeout(() => {
+				const list = STATE.clientsByIP[ip];
 				if (list && list.length === 0)
 					delete STATE.clientsByIP[ip];
-				delete ip_expiries[ip];
-			}, 5000);
+				ip_expiries.delete(ip);
+			}, 5000));
 		}
 	}
 
@@ -110,13 +111,13 @@ OK.on_close = function () {
 		this.id = null;
 	}
 	this.synced = false;
-	var db = this.db;
+	const { db } = this;
 	if (db) {
 		db.kikanai();
 		if (this.post)
-			this.finish_post(function (err) {
+			this.finish_post((err) => {
 				if (err)
-					winston.warn('finishing post: ' + err);
+					winston.warn(`finishing post: ${err}`);
 				db.disconnect();
 			});
 		else
@@ -129,27 +130,25 @@ OK.on_close = function () {
 OK.kotowaru = function (error) {
 	if (this.blackhole)
 		return;
-	var msg = 'Server error.';
+	let msg = 'Server error.';
 	if (error instanceof Muggle) {
 		msg = error.most_precise_error_message();
 		error = error.deepest_reason();
 	}
-	winston.error('Error by ' + JSON.stringify(this.ident) + ': '
-			+ (error || msg));
+	winston.error(`Error by ${JSON.stringify(this.ident)}: ${error || msg}`);
 	this.send([0, common.INVALID, msg]);
 	this.synced = false;
 };
 
 OK.finish_post = function (callback) {
 	/* TODO: Should we check this.uploading? */
-	var self = this;
-	this.db.finish_post(this.post, function (err) {
+	this.db.finish_post(this.post, (err) => {
 		if (err)
 			callback(err);
 		else {
-			if (self.post) {
-				self.last_num = self.post.num;
-				self.post = null;
+			if (this.post) {
+				this.last_num = this.post.num;
+				this.post = null;
 			}
 			callback(null);
 		}
@@ -157,11 +156,11 @@ OK.finish_post = function (callback) {
 };
 
 exports.scan_client_caps = function () {
-	for (var ip in STATE.clientsByIP) {
+	for (let ip in STATE.clientsByIP) {
 		STATE.clientsByIP[ip].forEach(function (okyaku) {
 			if (!okyaku.id || !okyaku.board)
 				return;
-			var ident = caps.lookup_ident(ip, okyaku.country);
+			let ident = caps.lookup_ident(ip, okyaku.country);
 			if (ident.timeout) {
 				okyaku.blackhole = true;
 				return;

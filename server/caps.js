@@ -180,7 +180,7 @@ exports.lookup_ident = function (ip, country) {
 	var ident = {ip, country, readOnly: config.READ_ONLY};
 	if (country
 		&& config.RESTRICTED_COUNTRIES
-		&& config.RESTRICTED_COUNTRIES.indexOf(country) >= 0) {
+		&& config.RESTRICTED_COUNTRIES.includes(country)) {
 		ident.readOnly = true;
 	}
 	var num = parse_ip(ip).num;

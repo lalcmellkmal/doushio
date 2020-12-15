@@ -1,4 +1,4 @@
-var _ = require('../lib/underscore'),
+const _ = require('../lib/underscore'),
     common = require('../common'),
     config = require('../config'),
     crypto = require('crypto'),
@@ -13,27 +13,25 @@ function connect() {
 }
 
 exports.login = function (req, resp) {
-	var ip = req.ident.ip;
+	const { ip } = req.ident;
 	// if login cookie present, redirect to board (preferably, go back. but will that be easy?)
-	var r = connect();
-	function fail(error) {
-		respond_error(resp, error)
-	}
+	const r = connect();
+	const fail = error => respond_error(resp, error);
 	if (req.query.state) {
-		var state = req.query.state;
-		r.get('github:'+state, function (err, savedIP) {
+		const { state } = req.query;
+		r.get('github:'+state, (err, savedIP) => {
 			if (err) {
-				winston.error("Couldn't read login: " + err);
+				winston.error(`Couldn't read login: ${err}`);
 				fail("Couldn't read login attempt.");
 				return;
 			}
 			if (!savedIP) {
-				winston.info("Expired login attempt from " + ip);
+				winston.info(`Expired login attempt from ${ip}`);
 				fail("Login attempt expired. Please try again.");
 				return;
 			}
 			if (savedIP != ip) {
-				winston.warn("IP changed from " + savedIP + " to " + ip);
+				winston.warn(`IP changed from ${savedIP} to ${ip}`);
 				fail("Your IP changed during login. Please try again.");
 				return;
 			}
@@ -43,33 +41,33 @@ exports.login = function (req, resp) {
 			}
 			if (req.query.error) {
 				// escaping out of paranoia (though respond_error emits JSON)
-				var err = common.escape_html(req.query.error);
-				winston.error("OAuth error: " + err);
+				let err = common.escape_html(req.query.error);
+				winston.error(`OAuth error: ${err}`);
 				if (req.query.error_description) {
 					err = common.escape_html(req.query.error_description);
-					winston.error("Desc: " + err);
+					winston.error(`Desc: ${err}`);
 				}
-				fail("OAuth login failure: " + err);
+				fail(`OAuth login failure: ${err}`);
 				return;
 			}
-			var code = req.query.code;
+			const { code } = req.query;
 			if (!code) {
 				fail("OAuth code missing!");
 				return;
 			}
-			request_access_token(req.query.code, state, function (err, token) {
+			request_access_token(code, state, (err, token) => {
 				if (err) {
-					winston.error("Github access token: " + err);
+					winston.error(`Requesting GH access token: ${err}`);
 					fail("Couldn't obtain token from GitHub. Try again.");
 					return;
 				}
-				request_username(token, function (err, username) {
+				request_username(token, (err, username) => {
 					if (err) {
-						winston.error("Username: " + err);
+						winston.error(`Requesting GH username: ${err}`);
 						fail("Couldn't read username. Try again.");
 						return;
 					}
-					r.del('github:'+state, function (err) {});
+					r.del('github:'+state, (err) => {});
 					if (/^popup:/.test(state))
 						req.popup_HACK = true;
 					verify_auth(req, resp, username);
@@ -79,21 +77,21 @@ exports.login = function (req, resp) {
 		return;
 	}
 	// new login attempt; TODO rate limit
-	var nonce = random_str();
+	let nonce = random_str();
 	if (req.query.popup !== undefined)
 		nonce = 'popup:' + nonce;
-	r.setex('github:'+nonce, 60, ip, function (err) {
+	r.setex('github:'+nonce, 60, ip, (err) => {
 		if (err) {
-			winston.error("Couldn't save login: " + err);
+			winston.error(`Couldn't save login: ${err}`);
 			fail("Couldn't persist login attempt.");
 			return;
 		}
-		var params = {
+		const params = {
 			client_id: config.GITHUB_CLIENT_ID,
 			state: nonce,
 			allow_signup: 'false',
 		};
-		var url = 'https://github.com/login/oauth/authorize?' +
+		const url = 'https://github.com/login/oauth/authorize?' +
 				querystring.stringify(params);
 		resp.writeHead(303, {Location: url});
 		resp.end('Redirect to GitHub Login');
@@ -101,18 +99,18 @@ exports.login = function (req, resp) {
 }
 
 function request_access_token(code, state, cb) {
-	var payload = {
+	const payload = {
 		client_id: config.GITHUB_CLIENT_ID,
 		client_secret: config.GITHUB_CLIENT_SECRET,
 		code: code,
 		state: state,
 	};
-	var opts = {
+	const opts = {
 		url: 'https://github.com/login/oauth/access_token',
 		body: payload,
 		json: true,
 	};
-	request.post(opts, function (err, tokenResp, packet) {
+	request.post(opts, (err, tokenResp, packet) => {
 		if (err || !packet || typeof packet.access_token != 'string') {
 			cb(err || "No access token in response");
 		}
@@ -123,12 +121,12 @@ function request_access_token(code, state, cb) {
 }
 
 function request_username(token, cb) {
-	var opts = {
+	const opts = {
 		url: 'https://api.github.com/user',
 		headers: {Authorization: 'token ' + token, 'User-Agent': 'Doushio-Auth'},
 		json: true,
 	};
-	request.get(opts, function (err, usernameResp, packet) {
+	request.get(opts, (err, usernameResp, packet) => {
 		if (err || !packet || typeof packet.login != 'string') {
 			cb(err || "Invalid username response");
 		}
@@ -141,35 +139,35 @@ function request_username(token, cb) {
 function verify_auth(req, resp, user) {
 	if (!user)
 		return respond_error(resp, 'Invalid username.');
-	var ip = req.ident.ip;
-	var packet = {ip: ip, user: user, date: Date.now()};
-	if (config.ADMIN_GITHUBS.indexOf(user) >= 0) {
-		winston.info("@" + user + " logging in as admin from " + ip);
+	const { ip } = req.ident;
+	const packet = {ip, user, date: Date.now()};
+	if (config.ADMIN_GITHUBS.includes(user)) {
+		winston.info(`@${user} logging in as admin from ${ip}`);
 		packet.auth = 'Admin';
 		exports.set_cookie(req, resp, packet);
 	}
-	else if (config.MODERATOR_GITHUBS.indexOf(user) >= 0) {
-		winston.info("@" + user + " logging in as moderator from " + ip);
+	else if (config.MODERATOR_GITHUBS.includes(user)) {
+		winston.info(`@${user} logging in as moderator from ${ip}`);
 		packet.auth = 'Moderator';
 		exports.set_cookie(req, resp, packet);
 	}
 	else {
-		winston.error("Login attempt by @" + user + " from " + ip);
+		winston.error(`Login attempt by @${user} from ${ip}`);
 		return respond_error(resp, 'Check your privilege.');
 	}
 };
 
 exports.set_cookie = function (req, resp, info) {
-	var pass = random_str();
+	const pass = random_str();
 	info.csrf = random_str();
 
-	var m = connect().multi();
+	const m = connect().multi();
 	m.hmset('session:'+pass, info);
 	m.expire('session:'+pass, config.LOGIN_SESSION_TIME);
-	m.exec(function (err) {
+	m.exec(err => {
 		if (err)
 			return oauth_error(resp, err);
-		respond_ok(req, resp, make_cookie('a', pass, info.expires));
+		respond_ok(req, resp, make_cookie('a', pass));
 	});
 };
 
@@ -181,8 +179,8 @@ function extract_login_cookie(chunks) {
 exports.extract_login_cookie = extract_login_cookie;
 
 exports.check_cookie = function (cookie, callback) {
-	var r = connect();
-	r.hgetall('session:' + cookie, function (err, session) {
+	const r = connect();
+	r.hgetall('session:' + cookie, (err, session) => {
 		if (err)
 			return callback(err);
 		else if (_.isEmpty(session))
@@ -198,13 +196,13 @@ exports.logout = function (req, resp) {
 			'<input type=submit value=Logout></form>');
 		return;
 	}
-	var r = connect();
-	var cookie = extract_login_cookie(req.cookies);
+	const r = connect();
+	const cookie = extract_login_cookie(req.cookies);
 	if (!cookie) {
 		console.log('no cookie');
 		return respond_error(resp, "No login cookie for logout.");
 	}
-	r.hgetall('session:' + cookie, function (err, session) {
+	r.hgetall('session:' + cookie, (err, session) => {
 		if (err)
 			return respond_error(resp, "Logout error.");
 		r.del('session:' + cookie);
@@ -214,11 +212,11 @@ exports.logout = function (req, resp) {
 
 function respond_error(resp, message) {
 	resp.writeHead(200, {'Content-Type': 'application/json'});
-	resp.end(JSON.stringify({status: 'error', message: message}));
+	resp.end(JSON.stringify({status: 'error', message}));
 }
 
 function respond_ok(req, resp, cookie) {
-	var headers = {'Set-Cookie': cookie};
+	const headers = {'Set-Cookie': cookie};
 	if (/json/.test(req.headers.accept)) {
 		headers['Content-Type'] = 'application/json';
 		resp.writeHead(200, headers);
@@ -238,16 +236,15 @@ function respond_ok(req, resp, cookie) {
 }
 
 function make_expiry() {
-	var expiry = new Date(Date.now()
-		+ config.LOGIN_SESSION_TIME*1000).toUTCString();
+	const expiry = new Date(Date.now() + config.LOGIN_SESSION_TIME*1000).toUTCString();
 	/* Change it to the expected dash-separated format */
-	var m = expiry.match(/^(\w+,\s+\d+)\s+(\w+)\s+(\d+\s+[\d:]+\s+\w+)$/);
-	return m ? m[1] + '-' + m[2] + '-' + m[3] : expiry;
+	const m = expiry.match(/^(\w+,\s+\d+)\s+(\w+)\s+(\d+\s+[\d:]+\s+\w+)$/);
+	return m ? `${m[1]}-${m[2]}-${m[3]}` : expiry;
 }
 
 function make_cookie(key, val) {
-	var header = key + '=' + val + '; Expires=' + make_expiry();
-	var domain = config.LOGIN_COOKIE_DOMAIN;
+	let header = `${key}=${val}; Expires=${make_expiry()}`;
+	const domain = config.LOGIN_COOKIE_DOMAIN;
 	if (domain)
 		header += '; Domain=' + domain;
 	return header;

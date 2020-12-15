@@ -3,15 +3,15 @@ const common = require('../common');
 const rollLimit = 5;
 
 exports.roll_dice = function (frag, post, extra) {
-	var ms = frag.split(common.dice_re);
-	var dice = [];
-	for (var i = 1; i < ms.length && dice.length < rollLimit; i += 2) {
-		var info = common.parse_dice(ms[i]);
+	const ms = frag.split(common.dice_re);
+	let dice = [];
+	for (let i = 1; i < ms.length && dice.length < rollLimit; i += 2) {
+		const info = common.parse_dice(ms[i]);
 		if (!info)
 			continue;
-		var f = info.faces;
-		var rolls = [f];
-		for (var j = 0; j < info.n; j++)
+		const f = info.faces;
+		const rolls = [f];
+		for (let j = 0; j < info.n; j++)
 			rolls.push(Math.floor(Math.random() * f) + 1);
 		if (info.bias)
 			rolls.push({bias: info.bias})
@@ -23,7 +23,7 @@ exports.roll_dice = function (frag, post, extra) {
 		// I don't want to spill into a separate redis list.
 		// Overwriting the whole log every time is quadratic though.
 		// Enforcing a roll limit to deter that and for sanity
-		var exist = post.dice ? post.dice.length : 0;
+		const exist = post.dice ? post.dice.length : 0;
 		if (dice.length + exist > rollLimit)
 			dice = dice.slice(0, Math.max(0, rollLimit - exist));
 		if (dice.length) {

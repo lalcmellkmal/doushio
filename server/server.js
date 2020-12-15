@@ -196,7 +196,7 @@ function page_nav(thread_count, cur_page, ascending) {
 
 function write_gzip_head(req, resp, headers) {
 	var encoding = config.GZIP && req.headers['accept-encoding'];
-	if (req.ident.slow || !encoding || encoding.indexOf('gzip') < 0) {
+	if (req.ident.slow || !encoding || !encoding.includes('gzip')) {
 		resp.writeHead(200, headers);
 		return resp;
 	}
@@ -1082,7 +1082,7 @@ dispatcher[common.EXECUTE_JS] = function (msg, client) {
 };
 
 function is_game_board(board) {
-	return config.GAME_BOARDS.indexOf(board) >= 0;
+	return config.GAME_BOARDS.includes(board);
 }
 
 function render_suspension(req, resp) {
@@ -1176,7 +1176,8 @@ function start_server() {
 			else {
 				winston.log('ctoken: invalid from ' + ip);
 			}
-		} else {
+		}
+		else {
 			winston.warn('ctoken: MISSING from ' + ip);
 		}
 

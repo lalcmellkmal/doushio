@@ -56,7 +56,8 @@ async function reload_conn_token() {
 		if (secretBytes.length != 32)
 			throw new Error('ctoken secret key is invalid');
 		HOT.connTokenSecretKey = secretBytes;
-	} else {
+	}
+	else {
 		// generate a new one
 		const secretKey = crypto.randomBytes(32);
 		const wasSet = await r.promise.setnx(key, secretKey.toString('hex'));
@@ -142,13 +143,13 @@ exports.reload_hot_resources = async function () {
 function make_navigation_html() {
 	if (!HOT.INTER_BOARD_NAVIGATION)
 		return '';
-	var bits = ['<nav>['];
+	const bits = ['<nav>['];
 	config.BOARDS.forEach(function (board, i) {
 		if (board == config.STAFF_BOARD)
 			return;
 		if (i > 0)
 			bits.push(' / ');
-		bits.push('<a href="../'+board+'/">'+board+'</a>');
+		bits.push(`<a href="../${board}/">${board}</a>`);
 	});
 	bits.push(']</nav>');
 	return bits.join('');

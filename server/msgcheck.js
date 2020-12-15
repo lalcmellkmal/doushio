@@ -14,7 +14,7 @@ function check(schema, msg) {
 	if (schema instanceof Array) {
 		if (!(msg instanceof Array) || msg.length != schema.length)
 			return false;
-		for (var i = 0; i < schema.length; i++)
+		for (let i = 0; i < schema.length; i++)
 			if (!check(schema[i], msg[i]))
 				return false;
 		return true;
@@ -31,8 +31,8 @@ function check(schema, msg) {
 	if (typeof schema == 'object') {
 		if (typeof msg != 'object' || msg === null || msg instanceof Array)
 			return false;
-		for (var k in schema) {
-			var spec = schema[k];
+		for (let k in schema) {
+			let spec = schema[k];
 			/* optional key */
 			if (typeof spec == 'string' && /^opt /.test(spec)) {
 				if (!(k in msg))
@@ -50,7 +50,7 @@ function check(schema, msg) {
 	else if (schema === 'id=>nat') {
 		if (typeof msg != 'object' || msg instanceof Array)
 			return false;
-		for (var k in msg) {
+		for (let k in msg) {
 			if (!/^[1-9]\d*$/.test(k))
 				return false;
 			if (!check('nat', msg[k]))
@@ -59,7 +59,7 @@ function check(schema, msg) {
 		return true;
 	}
 
-	throw new Error("Unknown schema: " + schema);
+	throw new Error(`Unknown schema: ${schema}`);
 }
 
 exports.check = check;

@@ -1,24 +1,25 @@
-var config = require('../config'),
+const config = require('../config'),
     minimist = require('minimist'),
     path = require('path');
 
 function usage() {
 	process.stderr.write(
-	  "Usage: node server/server.js\n"
-	+ "       --host <host> --port <port>\n"
-	+ "       --pid <pid file location>\n"
-	+ "\n"
-	+ "<port> can also be a unix domain socket path.\n"
-	);
+`Usage: node server/server.js
+       --host <host> --port <port>
+       --pid <pid file location>
+
+<port> can also be a unix domain socket path.
+`);
 	process.exit(1);
 }
 
 exports.parse_args = function () {
-	var argv = minimist(process.argv.slice(2));
+	const argv = minimist(process.argv.slice(2));
 
 	if ('h' in argv || 'help' in argv)
 		return usage();
 
+	// WTF MUTATING `config` ARE YOU SERIOUS, PAST ME?
 	if (argv.port)
 		config.LISTEN_PORT = argv.port;
 	if (argv.host)
