@@ -9,6 +9,7 @@ const _ = require('../lib/underscore'),
     caps = require('./caps'),
     check = require('./msgcheck').check,
     common = require('../common'),
+    { OneeSama, safe, escape_html } = common,
     config = require('../config'),
     curfew = require('../curfew/server'),
     crypto = require('crypto'),
@@ -17,7 +18,7 @@ const _ = require('../lib/underscore'),
     imager = require('../imager'),
     etc = require('../etc'),
     Muggle = etc.Muggle,
-    okyaku = require('./okyaku'),
+    { Okyaku, dispatcher, scan_client_caps } = require('./okyaku'),
     render = require('./render'),
     fetch = require('node-fetch'),
     STATE = require('./state'),
@@ -30,18 +31,12 @@ require('../admin');
 if (!imager.is_standalone())
 	require('../imager/daemon'); // preload and confirm it works
 try {
-	var reportConfig = require('../report/config');
+	const reportConfig = require('../report/config');
 	if (reportConfig.RECAPTCHA_SITE_KEY)
 		require('../report/server');
 } catch (e) {}
 
-var RES = STATE.resources;
-
-var dispatcher = okyaku.dispatcher;
-
-/* I always use encodeURI anyway */
-var escape = common.escape_html;
-var safe = common.safe;
+const RES = STATE.resources;
 
 dispatcher[common.PING] = function (msg, client) {
 	if (msg.length)
@@ -57,8 +52,8 @@ dispatcher[common.SYNCHRONIZE] = function (msg, client) {
 		if (!synchronize(msg, client))
 			client.kotowaru(Muggle("Bad protocol."));
 	}
-	var chunks = web.parse_cookie(msg.pop());
-	var cookie = auth.extract_login_cookie(chunks);
+	const chunks = web.parse_cookie(msg.pop());
+	const cookie = auth.extract_login_cookie(chunks);
 	if (cookie) {
 		auth.check_cookie(cookie, checked);
 		return true;
@@ -70,9 +65,9 @@ dispatcher[common.SYNCHRONIZE] = function (msg, client) {
 function synchronize(msg, client) {
 	if (!check(['id', 'string', 'id=>nat', 'boolean'], msg))
 		return false;
-	var id = msg[0], board = msg[1], syncs = msg[2], live = msg[3];
+	let [id, board, syncs, live] = msg;
 	if (id in STATE.clients) {
-		winston.error("Duplicate client id " + id);
+		winston.error(`Duplicate client id ${id}`);
 		return false;
 	}
 	client.id = id;
@@ -80,8 +75,8 @@ function synchronize(msg, client) {
 
 	if (!caps.can_access_board(client.ident, board))
 		return false;
-	var dead_threads = [], count = 0, op;
-	for (var k in syncs) {
+	let dead_threads = [], count = 0, op;
+	for (let k in syncs) {
 		k = parseInt(k, 10);
 		if (db.OPs[k] != k || !db.OP_has_tag(board, k)) {
 			delete syncs[k];
@@ -115,11 +110,10 @@ function synchronize(msg, client) {
 			client.on_thread_sink.bind(client), listening);
 	function listening(errs) {
 		if (errs && errs.length >= count)
-			return client.kotowaru(Muggle(
-					"Couldn't sync to board."));
+			return client.kotowaru(Muggle("Couldn't sync to board."));
 		else if (errs) {
 			dead_threads.push.apply(dead_threads, errs);
-			errs.forEach(function (thread) {
+			errs.forEach(thread => {
 				delete client.watching[thread];
 			});
 		}
@@ -128,7 +122,7 @@ function synchronize(msg, client) {
 	function got_backlogs(errs, logs) {
 		if (errs) {
 			dead_threads.push.apply(dead_threads, errs);
-			errs.forEach(function (thread) {
+			errs.forEach(thread => {
 				delete client.watching[thread];
 			});
 		}
@@ -166,7 +160,7 @@ function setup_imager_relay() {
 function image_status(client_id, status) {
 	if (!check('id', client_id))
 		return;
-	var client = STATE.clients[client_id];
+	const client = STATE.clients[client_id];
 	if (client) {
 		try {
 			client.send([0, common.IMAGE_STATUS, status]);
@@ -179,23 +173,22 @@ function image_status(client_id, status) {
 }
 
 function page_nav(thread_count, cur_page, ascending) {
-	var page_count = Math.ceil(thread_count / config.THREADS_PER_PAGE);
+	let page_count = Math.ceil(thread_count / config.THREADS_PER_PAGE);
 	page_count = Math.max(page_count, 1);
-	var info = {pages: page_count, threads: thread_count,
-		cur_page: cur_page, ascending: ascending};
+	const info = {pages: page_count, threads: thread_count, cur_page, ascending};
 
-	var step = ascending ? -1 : 1;
-	var next = Math.max(cur_page, 0) + step;
+	const step = ascending ? -1 : 1;
+	const next = Math.max(cur_page, 0) + step;
 	if (next >= 0 && next < page_count)
 		info.next_page = 'page' + next;
-	var prev = cur_page - step;
+	const prev = cur_page - step;
 	if (prev >= 0 && prev < page_count)
 		info.prev_page = 'page' + prev;
 	return info;
 }
 
 function write_gzip_head(req, resp, headers) {
-	var encoding = config.GZIP && req.headers['accept-encoding'];
+	const encoding = config.GZIP && req.headers['accept-encoding'];
 	if (req.ident.slow || !encoding || !encoding.includes('gzip')) {
 		resp.writeHead(200, headers);
 		return resp;
@@ -205,7 +198,7 @@ function write_gzip_head(req, resp, headers) {
 		Vary: 'Accept-Encoding',
 	}));
 
-	var gz = require('zlib').createGzip();
+	const gz = require('zlib').createGzip();
 	gz.pipe(resp);
 	return gz;
 }
@@ -257,46 +250,40 @@ function write_mod_js(resp, ident) {
 		return;
 	}
 
-	var noCacheJs = _.clone(web.noCacheHeaders);
+	const noCacheJs = _.clone(web.noCacheHeaders);
 	noCacheJs['Content-Type'] = 'text/javascript; charset=UTF-8';
 	resp.writeHead(200, noCacheJs);
-	resp.write('(function (IDENT) {');
-	resp.write(RES.modJs);
-	resp.end('})(' + JSON.stringify(ident) + ');');
+	resp.end(`(function (IDENT) {
+${RES.modJs};
+})(${JSON.stringify(ident)});`);
 }
 
-web.resource_auth(/^\/admin\.js$/, function (req, cb) {
+web.resource_auth(/^\/admin\.js$/, (req, cb) => {
 	if (!caps.can_administrate(req.ident))
 		cb(404);
 	else
 		cb(null, 'ok');
 },
 function (req, resp) {
-	write_mod_js(resp, {
-		auth: req.ident.auth,
-		csrf: req.ident.csrf,
-		user: req.ident.user,
-	});
+	const { auth, csrf, user } = req.ident;
+	write_mod_js(resp, { auth, csrf, user });
 });
 
-web.resource_auth(/^\/mod\.js$/, function (req, cb) {
+web.resource_auth(/^\/mod\.js$/, (req, cb) => {
 	if (!caps.can_moderate(req.ident))
 		cb(404);
 	else
 		cb(null, 'ok');
 },
-function (req, resp) {
-	write_mod_js(resp, {
-		auth: req.ident.auth,
-		csrf: req.ident.csrf,
-		user: req.ident.user,
-	});
+(req, resp) => {
+	const { auth, csrf, user } = req.ident;
+	write_mod_js(resp, { auth, csrf, user });
 });
 
 web.resource(/^\/(\w+)$/, function (req, params, cb) {
-	var board = params[1];
+	const board = params[1];
 	/* If arbitrary boards were allowed, need to escape this: */
-	var dest = board + '/';
+	const dest = board + '/';
 	if (req.ident.suspension)
 		return cb(null, 'redirect', dest); /* TEMP */
 	if (!caps.can_ever_access_board(req.ident, board))
@@ -320,7 +307,7 @@ web.resource(/^\/(\w+)\/$/, (req, params, cb) => {
 	if (!caps.can_ever_access_board(ident, board))
 		return cb(404);
 
-	cb(null, 'ok', {board: board});
+	cb(null, 'ok', { board });
 },
 function (req, resp) {
 	/* TEMP */
@@ -337,7 +324,7 @@ function (req, resp) {
 	const yaku = new db.Yakusoku(board, ident);
 	yaku.get_tag(-1);
 	let paginationHtml;
-	yaku.once('begin', function (thread_count) {
+	yaku.once('begin', (thread_count) => {
 		const nav = page_nav(thread_count, -1, board == 'archive');
 		const initScript = make_init_script(ident);
 		render.write_board_head(resp, initScript, board, nav);
@@ -346,44 +333,41 @@ function (req, resp) {
 		resp.write('<hr>\n');
 	});
 	resp = write_gzip_head(req, resp, web.noCacheHeaders);
-	var opts = {fullLinks: true, board: board};
+	const opts = {fullLinks: true, board};
 	render.write_thread_html(yaku, req, resp, opts);
-	yaku.once('end', function () {
+	yaku.once('end', () => {
 		resp.write(paginationHtml);
 		render.write_page_end(resp, ident, false);
 		resp.end();
 		yaku.disconnect();
 	});
-	yaku.once('error', function (err) {
-		winston.error('index:' + err);
+	yaku.once('error', (err) => {
+		winston.error(`rendering /${board}/ index: ${err}`);
 		resp.end();
 		yaku.disconnect();
 	});
 });
 
 web.resource(/^\/(\w+)\/page(\d+)$/, function (req, params, cb) {
-	var board = params[1];
+	const board = params[1];
 	if (!caps.temporal_access_check(req.ident, board))
 		return cb(null, 302, '..');
 	if (req.ident.suspension)
 		return cb(null, 'ok'); /* TEMP */
 	if (!caps.can_access_board(req.ident, board))
 		return cb(404);
-	var page = parseInt(params[2], 10);
+	const page = parseInt(params[2], 10);
 	if (page > 0 && params[2][0] == '0') /* leading zeroes? */
-		return cb(null, 'redirect', 'page' + page);
+		return cb(null, 'redirect', 'page' + page); // if so, normalize url
 
-	var yaku = new db.Yakusoku(board, req.ident);
+	const yaku = new db.Yakusoku(board, req.ident);
 	yaku.get_tag(page);
-	yaku.once('nomatch', function () {
+	yaku.once('nomatch', () => {
 		cb(null, 302, '.');
 		yaku.disconnect();
 	});
-	yaku.once('begin', function (threadCount) {
-		cb(null, 'ok', {
-			board: board, page: page, yaku: yaku,
-			threadCount: threadCount,
-		});
+	yaku.once('begin', (threadCount) => {
+		cb(null, 'ok', { board, page, yaku, threadCount });
 	});
 },
 function (req, resp) {
@@ -391,35 +375,34 @@ function (req, resp) {
 	if (req.ident.suspension)
 		return render_suspension(req, resp);
 
-	var board = this.board;
-	var nav = page_nav(this.threadCount, this.page, board == 'archive');
+	const { board, page, yaku, threadCount } = this;
+	const nav = page_nav(this.threadCount, page, board == 'archive');
 	resp = write_gzip_head(req, resp, web.noCacheHeaders);
-	var initScript = make_init_script(req.ident);
+	const initScript = make_init_script(req.ident);
 	render.write_board_head(resp, initScript, board, nav);
-	var paginationHtml = render.make_pagination_html(nav);
+	const paginationHtml = render.make_pagination_html(nav);
 	resp.write(paginationHtml);
 	resp.write('<hr>\n');
 
-	var opts = {fullLinks: true, board: board};
-	render.write_thread_html(this.yaku, req, resp, opts);
-	var self = this;
-	this.yaku.once('end', function () {
+	const opts = {fullLinks: true, board};
+	render.write_thread_html(yaku, req, resp, opts);
+	yaku.once('end', () => {
 		resp.write(paginationHtml);
 		render.write_page_end(resp, req.ident, false);
 		resp.end();
-		self.finished();
+		this.finished();
 	});
-	this.yaku.once('error', function (err) {
-		winston.error('page' + self.page + ': ' + err);
+	yaku.once('error', (err) => {
+		winston.error(`rendering /${board}/ page #${page}: ${err}`);
 		resp.end();
-		self.finished();
+		this.finished();
 	});
 },
 function () {
 	this.yaku.disconnect();
 });
 
-web.resource(/^\/(\w+)\/page(\d+)\/$/, function (req, params, cb) {
+web.resource(/^\/(\w+)\/page(\d+)\/$/, (req, params, cb) => {
 	if (!caps.temporal_access_check(req.ident, params[1]))
 		cb(null, 302, '..');
 	else
@@ -427,20 +410,21 @@ web.resource(/^\/(\w+)\/page(\d+)\/$/, function (req, params, cb) {
 });
 
 web.resource(/^\/(\w+)\/(\d+)$/, function (req, params, cb) {
-	var board = params[1];
+	const board = params[1];
 	if (!caps.temporal_access_check(req.ident, board))
 		return cb(null, 302, '.');
 	if (req.ident.suspension)
 		return cb(null, 'ok'); /* TEMP */
 	if (!caps.can_access_board(req.ident, board))
 		return cb(404);
-	var num = parseInt(params[2], 10);
+	const num = parseInt(params[2], 10);
 	if (!num)
 		return cb(404);
 	else if (params[2][0] == '0')
 		return cb(null, 'redirect', '' + num);
 
-	var op, json = web.prefers_json(req.headers.accept);
+	const json = web.prefers_json(req.headers.accept);
+	let op;
 	if (board == 'graveyard') {
 		op = num;
 	}
@@ -449,15 +433,14 @@ web.resource(/^\/(\w+)\/(\d+)$/, function (req, params, cb) {
 		if (!op)
 			return cb(404);
 		if (!json && !db.OP_has_tag(board, op)) {
-			var tag = db.first_tag_of(op);
+			const tag = db.first_tag_of(op);
 			if (tag) {
 				if (!caps.can_access_board(req.ident, tag))
 					return cb(404);
 				return redirect_thread(cb, num, op, tag);
 			}
 			else {
-				winston.warn("Orphaned post " + num +
-					"with tagless OP " + op);
+				winston.warn(`Orphaned post >>${num} with tagless OP >>${op}`);
 				return cb(404);
 			}
 		}
@@ -467,67 +450,60 @@ web.resource(/^\/(\w+)\/(\d+)$/, function (req, params, cb) {
 	if (!caps.can_access_thread(req.ident, op))
 		return cb(404);
 	if (json)
-		return cb(null, 'ok', {json: true, num: num});
+		return cb(null, 'ok', {json: true, num});
 
-	var yaku = new db.Yakusoku(board, req.ident);
-	var reader = new db.Reader(yaku);
-	var opts = {redirect: true};
+	const yaku = new db.Yakusoku(board, req.ident);
+	const reader = new db.Reader(yaku);
+	const opts = {redirect: true};
 
-	var lastN = detect_last_n(req.query);
+	const lastN = detect_last_n(req.query);
 	if (lastN)
 		opts.abbrev = lastN + config.ABBREVIATED_REPLIES;
 
 	if (caps.can_administrate(req.ident) && 'reported' in req.query)
 		opts.showDead = true;
+
 	reader.get_thread(board, num, opts);
-	reader.once('nomatch', function () {
+	reader.once('nomatch', () => {
 		cb(404);
 		yaku.disconnect();
 	});
-	reader.once('redirect', function (op, tag) {
+	reader.once('redirect', (op, tag) => {
 		redirect_thread(cb, num, op, tag);
 		yaku.disconnect();
 	});
-	reader.once('begin', function (preThread) {
-		var headers = web.noCacheHeaders;
-		cb(null, 'ok', {
-			headers: headers,
-			board: board, op: op,
-			subject: preThread.subject,
-			yaku: yaku, reader: reader,
-			abbrev: opts.abbrev,
-		});
+	reader.once('begin', (preThread) => {
+		const headers = web.noCacheHeaders;
+		const { subject } = preThread;
+		const { abbrev } = opts;
+		cb(null, 'ok', { board, op, headers, subject, abbrev, yaku, reader });
 	});
 },
 function (req, resp) {
-	/* TEMP */
+	/* TODO: json suspensions */
 	if (req.ident.suspension)
 		return render_suspension(req, resp);
 	if (this.json)
 		return write_json_post(req, resp, this.num);
 
-	var board = this.board, op = this.op;
+	const { board, op, headers, subject, abbrev, yaku, reader } = this;
 
-	resp = write_gzip_head(req, resp, this.headers);
-	var initScript = make_init_script(req.ident);
-	render.write_thread_head(resp, initScript, board, op, {
-		subject: this.subject,
-		abbrev: this.abbrev,
-	});
+	resp = write_gzip_head(req, resp, headers);
+	const initScript = make_init_script(req.ident);
+	render.write_thread_head(resp, initScript, board, op, { subject, abbrev });
 
-	var opts = {fullPosts: true, board: board, loadAllPostsLink: true};
-	render.write_thread_html(this.reader, req, resp, opts);
-	var self = this;
-	this.reader.once('end', function () {
+	const opts = {fullPosts: true, board, loadAllPostsLink: true};
+	render.write_thread_html(reader, req, resp, opts);
+	reader.once('end', () => {
 		render.write_page_end(resp, req.ident, true);
 		resp.end();
-		self.finished();
+		this.finished();
 	});
-	function on_err(err) {
-		winston.error('thread '+num+':', err);
+	const on_err = (err) => {
+		winston.error(`rendering thread >>${num}: ${err}`);
 		resp.end();
-		self.finished();
-	}
+		this.finished();
+	};
 	this.reader.once('error', on_err);
 	this.yaku.once('error', on_err);
 },
@@ -536,9 +512,9 @@ function () {
 });
 
 function write_json_post(req, resp, num) {
-	var json = {TODO: true};
+	const json = {TODO: true};
 
-	var cache = json.editing ? 'no-cache' : 'private, max-age=86400';
+	const cache = json.editing ? 'no-cache' : 'private, max-age=86400';
 	resp = write_gzip_head(req, resp, {
 		'Content-Type': 'application/json',
 		'Cache-Control': cache,
@@ -547,10 +523,10 @@ function write_json_post(req, resp, num) {
 }
 
 function detect_last_n(query) {
-	for (var k in query) {
-		var m = /^last(\d+)$/.exec(k);
+	for (let k in query) {
+		const m = /^last(\d+)$/.exec(k);
 		if (m) {
-			var n = parseInt(m[1], 10);
+			const n = parseInt(m[1], 10);
 			if (common.reasonable_last_n(n))
 				return n;
 		}
@@ -578,61 +554,62 @@ web.resource(/^\/outbound\/iqdb\/([\w+\/]{22}\.\w{3,4})$/, (req, params, cb) => 
 });
 
 web.resource(/^\/outbound\/a\/(\d{0,10})$/, function (req, params, cb) {
-	var thread = parseInt(params[1], 10);
-	var url = 'https://boards.4chan.org/a/';
+	const thread = parseInt(params[1], 10);
+	let url = 'https://boards.4chan.org/a/';
 	if (thread)
 		url += 'thread/' + thread;
 	cb(null, 303.1, url);
 });
 
 function make_init_script(ident) {
-	var secretKey = STATE.hot.connTokenSecretKey;
+	const secretKey = STATE.hot.connTokenSecretKey;
 	if (!ident || !secretKey)
 		return '';
-	var country = ident.country || 'x';
-	var payload = JSON.stringify({
+	const country = ident.country || 'x';
+	const payload = JSON.stringify({
 		ip: ident.ip,
 		cc: country,
 		ts: Date.now(),
 	});
 	// encrypt payload as 'ctoken'
-	var iv = crypto.randomBytes(12);
-	var cipher = crypto.createCipheriv('aes-256-gcm', secretKey, iv);
-	var crypted = cipher.update(payload, 'utf8', 'hex');
+	const iv = crypto.randomBytes(12);
+	const cipher = crypto.createCipheriv('aes-256-gcm', secretKey, iv);
+	let crypted = cipher.update(payload, 'utf8', 'hex');
 	crypted += cipher.final('hex');
-	var authTag = cipher.getAuthTag()
-	if (authTag.length != 16) throw 'auth tag of unexpected length';
-	var combined = iv.toString('hex') + authTag.toString('hex') + crypted;
-	return '\t<script>var ctoken = ' + etc.json_paranoid(combined) + ';</script>\n';
+	const authTag = cipher.getAuthTag()
+	if (authTag.length != 16)
+		throw 'auth tag of unexpected length';
+	const combined = iv.toString('hex') + authTag.toString('hex') + crypted;
+	return `\t<script>const ctoken = ${etc.json_paranoid(combined)};</script>\n`;
 }
 
 function decrypt_ctoken(ctoken) {
-	var secretKey = STATE.hot.connTokenSecretKey;
+	const secretKey = STATE.hot.connTokenSecretKey;
 	if (!secretKey)
 		return null;
 	if (ctoken.length < 56) {
 		winston.warn('ctoken too short');
 		return null;
 	}
-	var iv = Buffer.from(ctoken.slice(0, 24), 'hex');
+	const iv = Buffer.from(ctoken.slice(0, 24), 'hex');
 	if (iv.length != 12) {
 		winston.warn('iv not hex');
 		return null;
 	}
-	var authTag = Buffer.from(ctoken.slice(24, 56), 'hex');
+	const authTag = Buffer.from(ctoken.slice(24, 56), 'hex');
 	if (authTag.length != 16) {
 		winston.warn('authTag not hex');
 		return null;
 	}
 	try {
-		var decipher = crypto.createDecipheriv('aes-256-gcm', secretKey, iv);
+		const decipher = crypto.createDecipheriv('aes-256-gcm', secretKey, iv);
 		decipher.setAuthTag(authTag);
-		var plain = decipher.update(ctoken.slice(56), 'hex', 'utf8');
+		let plain = decipher.update(ctoken.slice(56), 'hex', 'utf8');
 		plain += decipher.final('utf8');
 		return JSON.parse(plain);
 	}
 	catch (e) {
-		winston.warn(e);
+		winston.warn(`decrypt ctoken: ${e}`);
 	}
 	return null;
 }
@@ -738,9 +715,9 @@ web.route_get_auth(/^\/dead\/(src|thumb|mid)\/(\w+\.\w{3})$/,
 
 /* Must be prepared to receive callback instantly */
 function valid_links(frag, state, ident, callback) {
-	var links = {};
-	var onee = new common.OneeSama(function (num) {
-		var op = db.OPs[num];
+	const links = {};
+	const onee = new OneeSama(function (num) {
+		const op = db.OPs[num];
 		if (op && caps.can_access_thread(ident, op))
 			links[num] = db.OPs[num];
 	});
@@ -750,7 +727,7 @@ function valid_links(frag, state, ident, callback) {
 	callback(null, _.isEmpty(links) ? null : links);
 }
 
-var insertSpec = [{
+const insertSpec = [{
 	frag: 'opt string',
 	image: 'opt string',
 	nonce: 'id',
@@ -770,15 +747,15 @@ dispatcher[common.INSERT_POST] = function (msg, client) {
 		return update_post(msg.frag, client);
 	if (!caps.can_access_board(client.ident, client.board))
 		return false;
-	var frag = msg.frag;
+	const { frag, image } = msg;
 	if (frag && /^\s*$/g.test(frag))
 		return false;
-	if (!frag && !msg.image)
+	if (!frag && !image)
 		return false;
 	if (config.DEBUG)
 		debug_command(client, frag);
 
-	allocate_post(msg, client, function (err) {
+	allocate_post(msg, client, (err) => {
 		if (err)
 			client.kotowaru(Muggle("Allocation failure.", err));
 	});
@@ -796,11 +773,11 @@ function allocate_post(msg, client, callback) {
 		return callback(Muggle("Already have a post."));
 	if (!inactive_board_check(client))
 		return callback(Muggle("Can't post here."));
-	var post = {time: Date.now(), nonce: msg.nonce};
-	var body = '';
-	var ip = client.ident.ip;
-	var extra = {ip: ip, board: client.board};
-	var image_alloc;
+	const post = {time: Date.now(), nonce: msg.nonce};
+	let body = '';
+	const { ip } = client.ident;
+	const extra = {ip, board: client.board};
+	let image_alloc;
 	if (msg.image) {
 		if (!/^\d+$/.test(msg.image))
 			return callback(Muggle('Expired image token.'));
@@ -824,7 +801,7 @@ function allocate_post(msg, client, callback) {
 	else {
 		if (!image_alloc)
 			return callback(Muggle('Image missing.'));
-		var subject = (msg.subject || '').trim();
+		let subject = (msg.subject || '').trim();
 		subject = subject.replace(config.EXCLUDE_REGEXP, '');
 		subject = subject.replace(/[「」]/g, '');
 		subject = subject.slice(0, config.SUBJECT_MAX_LENGTH);
@@ -834,16 +811,16 @@ function allocate_post(msg, client, callback) {
 
 	/* TODO: Check against client.watching? */
 	if (msg.name) {
-		var parsed = common.parse_name(msg.name);
-		post.name = parsed[0];
-		var spec = STATE.hot.SPECIAL_TRIPCODES;
-		if (spec && parsed[1] && parsed[1] in spec) {
-			post.trip = spec[parsed[1]];
+		const [name, trip, secureTrip] = common.parse_name(msg.name);
+		post.name = name;
+		const spec = STATE.hot.SPECIAL_TRIPCODES;
+		if (spec && trip && trip in spec) {
+			post.trip = spec[trip];
 		}
-		else if (parsed[1] || parsed[2]) {
-			var trip = tripcode.hash(parsed[1], parsed[2]);
-			if (trip)
-				post.trip = trip;
+		else if (trip || secureTrip) {
+			const hashed = tripcode.hash(trip, secureTrip);
+			if (hashed)
+				post.trip = hashed;
 		}
 	}
 	if (msg.email) {
@@ -858,8 +835,7 @@ function allocate_post(msg, client, callback) {
 	post.state = common.initial_state();
 
 	if ('auth' in msg) {
-		if (!msg.auth || !client.ident
-				|| msg.auth !== client.ident.auth)
+		if (!msg.auth || !client.ident || msg.auth !== client.ident.auth)
 			return callback(Muggle('Bad auth.'));
 		post.auth = msg.auth;
 	}
@@ -888,9 +864,8 @@ function allocate_post(msg, client, callback) {
 
 		client.post = post;
 		post.num = num;
-		var supplements = {
-			links: valid_links.bind(null, body, post.state,
-					client.ident),
+		const supplements = {
+			links: valid_links.bind(null, body, post.state, client.ident),
 		};
 		if (image_alloc)
 			supplements.image = (cb) => {
@@ -931,31 +906,31 @@ function update_post(frag, client) {
 	if (config.DEBUG)
 		debug_command(client, frag);
 	frag = frag.replace(config.EXCLUDE_REGEXP, '');
-	var post = client.post;
+	const { post } = client;
 	if (!post)
 		return false;
-	var limit = common.MAX_POST_CHARS;
+	const limit = common.MAX_POST_CHARS;
 	if (frag.length > limit || post.length >= limit)
 		return false;
-	var combined = post.length + frag.length;
+	const combined = post.length + frag.length;
 	if (combined > limit)
 		frag = frag.substr(0, combined - limit);
-	var extra = {ip: client.ident.ip};
+	const extra = {ip: client.ident.ip};
 	if (is_game_board(client.board))
 		amusement.roll_dice(frag, post, extra);
 	post.body += frag;
 	/* imporant: broadcast prior state */
-	var old_state = post.state.slice();
+	const old_state = post.state.slice();
 
-	valid_links(frag, post.state, client.ident, function (err, links) {
+	valid_links(frag, post.state, client.ident, (err, links) => {
 		if (err)
 			links = null; /* oh well */
 		if (links) {
 			if (!post.links)
 				post.links = {};
-			var new_links = {};
-			for (var k in links) {
-				var link = links[k];
+			const new_links = {};
+			for (let k in links) {
+				const link = links[k];
 				if (post.links[k] != link) {
 					post.links[k] = link;
 					new_links[k] = link;
@@ -965,11 +940,9 @@ function update_post(frag, client) {
 			extra.new_links = new_links;
 		}
 
-		client.db.append_post(post, frag, old_state, extra,
-					function (err) {
+		client.db.append_post(post, frag, old_state, extra, err => {
 			if (err)
-				client.kotowaru(Muggle("Couldn't add text.",
-						err));
+				client.kotowaru(Muggle("Couldn't add text.", err));
 		});
 	});
 	return true;
@@ -997,35 +970,31 @@ dispatcher[common.FINISH_POST] = function (msg, client) {
 	return true;
 }
 
-dispatcher[common.DELETE_POSTS] = caps.mod_handler(function (nums, client) {
+dispatcher[common.DELETE_POSTS] = caps.mod_handler((nums, client) => {
 	if (!inactive_board_check(client))
 		return client.kotowaru(Muggle("Couldn't delete."));
 	/* Omit to-be-deleted posts that are inside to-be-deleted threads */
-	var ops = {}, OPs = db.OPs;
-	nums.forEach(function (num) {
+	const ops = {};
+	const { OPs } = db;
+	for (let num of nums) {
 		if (num == OPs[num])
 			ops[num] = 1;
-	});
-	nums = nums.filter(function (num) {
-		var op = OPs[num];
-		return op == num || !(OPs[num] in ops);
-	});
+	}
+	nums = nums.filter(num => (OPs[num] == num || !(OPs[num] in ops)));
 
-	client.db.remove_posts(nums, function (err, dels) {
+	client.db.remove_posts(nums, (err, dels) => {
 		if (err)
 			client.kotowaru(Muggle("Couldn't delete.", err));
 	});
 });
 
-dispatcher[common.LOCK_THREAD] = caps.mod_handler(function (nums, client) {
+dispatcher[common.LOCK_THREAD] = caps.mod_handler((nums, client) => {
 	if (!inactive_board_check(client))
 		return client.kotowaru(Muggle("Couldn't (un)lock thread."));
 	nums = nums.filter(op => db.OPs[op] == op);
-	async.forEach(nums, client.db.toggle_thread_lock.bind(client.db),
-				function (err) {
+	async.forEach(nums, client.db.toggle_thread_lock.bind(client.db), (err) => {
 		if (err)
-			client.kotowaru(Muggle(
-					"Couldn't (un)lock thread.", err));
+			client.kotowaru(Muggle("Couldn't (un)lock thread.", err));
 	});
 });
 
@@ -1073,7 +1042,7 @@ dispatcher[common.EXECUTE_JS] = function (msg, client) {
 		return false;
 	if (!check(['id'], msg))
 		return false;
-	var op = msg[0];
+	const op = msg[0];
 	client.db.set_fun_thread(op, function (err) {
 		if (err)
 			client.kotowaru(err);
@@ -1087,20 +1056,20 @@ function is_game_board(board) {
 
 function render_suspension(req, resp) {
 setTimeout(function () {
-	var ban = req.ident.suspension, tmpl = RES.suspensionTmpl;
+	const ban = req.ident.suspension, tmpl = RES.suspensionTmpl;
 	resp.writeHead(200, web.noCacheHeaders);
 	resp.write(tmpl[0]);
-	resp.write(escape(ban.why || ''));
+	resp.write(escape_html(ban.why || ''));
 	resp.write(tmpl[1]);
-	resp.write(escape(ban.until || ''));
+	resp.write(escape_html(ban.until || ''));
 	resp.write(tmpl[2]);
-	resp.write(escape(STATE.hot.EMAIL || '<missing>'));
+	resp.write(escape_html(STATE.hot.EMAIL || '<missing>'));
 	resp.end(tmpl[3]);
 }, 2000);
 }
 
 function get_sockjs_script_sync() {
-	var src = fs.readFileSync('tmpl/index.html', 'UTF-8');
+	const src = fs.readFileSync('tmpl/index.html', 'UTF-8');
 	return src.match(/sockjs-[\d.]+(?:\.min)?\.js/)[0];
 }
 
@@ -1121,7 +1090,7 @@ else {
 }
 
 function start_server() {
-	var is_unix_socket = (typeof config.LISTEN_PORT == 'string');
+	const is_unix_socket = (typeof config.LISTEN_PORT == 'string');
 	if (is_unix_socket) {
 		try { fs.unlinkSync(config.LISTEN_PORT); } catch (e) {}
 	}
@@ -1131,57 +1100,54 @@ function start_server() {
 	}
 
 
-	var sockjsPath = 'js/' + get_sockjs_script_sync();
-	var sockOpts = {
+	const sockjsPath = 'js/' + get_sockjs_script_sync();
+	const sockOpts = {
 		sockjs_url: imager.config.MEDIA_URL + sockjsPath,
 		prefix: config.SOCKET_PATH,
 		jsessionid: false,
 		log: sockjs_log,
 		websocket: true,
 	};
-	var sockJs = require('sockjs').createServer(sockOpts);
-	web.server.on('upgrade', function (req, resp) {
-		resp.end();
-	});
+	const sockJs = require('sockjs').createServer(sockOpts);
+	web.server.on('upgrade', (req, resp) => resp.end());
 	sockJs.installHandlers(web.server);
 
-	sockJs.on('connection', function (socket) {
-		var ip = socket.remoteAddress;
-		var country;
+	sockJs.on('connection', (socket) => {
+		let ip = socket.remoteAddress;
+		let country;
 		if (config.TRUST_X_FORWARDED_FOR) {
-			var ff = web.parse_forwarded_for(
-					socket.headers['x-forwarded-for']);
+			const ff = web.parse_forwarded_for(socket.headers['x-forwarded-for']);
 			if (ff)
 				ip = ff;
 		}
 		if (!ip) {
-			winston.warn('no ip from ' + socket);
+			winston.warn(`no ip from ${socket}`);
 			socket.close();
 			return;
 		}
 
 		// parse ctoken
-		var url = urlParse(socket.url, true);
+		const url = urlParse(socket.url, true);
 		if (url.query && url.query.ctoken) {
-			var token = decrypt_ctoken(url.query.ctoken);
+			const token = decrypt_ctoken(url.query.ctoken);
 			if (token) {
 				if (token.ts + 24*60*60*1000 < Date.now()) {
 					// token expired, ask for a new one?
 					winston.warn('ctoken: expired');
 				}
 				if (ip != token.ip)
-					winston.info('ctoken: ' + ip + ' != ' + token.ip);
+					winston.info(`ctoken: ${ip} != ${token.ip}`);
 				country = token.cc;
 			}
 			else {
-				winston.log('ctoken: invalid from ' + ip);
+				winston.log(`ctoken: invalid from ${ip}`);
 			}
 		}
-		else {
-			winston.warn('ctoken: MISSING from ' + ip);
+		else if (STATE.hot.connTokenSecretKey) {
+			winston.warn(`ctoken: MISSING from ${ip}`);
 		}
 
-		var client = new okyaku.Okyaku(socket, ip, country);
+		const client = new Okyaku(socket, ip, country);
 		socket.on('data', client.on_message.bind(client));
 		socket.on('close', client.on_close.bind(client));
 	});
@@ -1190,21 +1156,16 @@ function start_server() {
 	db.on_pub('reloadHot', hot_reloader);
 
 	if (config.DAEMON) {
-		var cfg = config.DAEMON;
-		var daemon = require('daemon');
-		var pid = daemon.start(process.stdout.fd, process.stderr.fd);
-		var lock = config.PID_FILE;
-		daemon.lock(lock);
+		const daemon = require('daemon');
+		daemon.start(process.stdout.fd, process.stderr.fd);
+		daemon.lock(config.PID_FILE);
 		winston.remove(winston.transports.Console);
 		return;
 	}
 
 	process.nextTick(non_daemon_pid_setup);
 
-	winston.info('Listening on '
-			+ (config.LISTEN_HOST || '')
-			+ (is_unix_socket ? '' : ':')
-			+ (config.LISTEN_PORT + '.'));
+	winston.info(`Listening on ${config.LISTEN_HOST || ''}${is_unix_socket ? '' : ':'}${config.LISTEN_PORT}.`);
 }
 
 async function hot_reloader() {
@@ -1216,18 +1177,18 @@ async function hot_reloader() {
 		winston.error(err);
 		return;
 	}
-	okyaku.scan_client_caps();
+	scan_client_caps();
 	winston.info('Reloaded initial state.');
 }
 
 function non_daemon_pid_setup() {
-	var pidFile = config.PID_FILE;
-	fs.writeFile(pidFile, process.pid+'\n', function (err) {
+	const pidFile = config.PID_FILE;
+	fs.writeFile(pidFile, process.pid+'\n', (err) => {
 		if (err)
-			return winston.warn("Couldn't write pid: " + err);
+			return winston.warn(`Couldn't write pid: ${err}`);
 		process.once('SIGINT', delete_pid);
 		process.once('SIGTERM', delete_pid);
-		winston.info('PID ' + process.pid + ' written in ' + pidFile);
+		winston.info(`PID ${process.pid} written to ${pidFile}`);
 	});
 
 	function delete_pid() {

@@ -23,8 +23,8 @@ exports.dbCache = {
 	connTokenSecretKey: null,
 };
 
-var HOT = exports.hot = {};
-var RES = exports.resources = {};
+const HOT = exports.hot = {};
+const RES = exports.resources = {};
 exports.clients = {};
 exports.clientsByIP = {};
 
@@ -105,17 +105,21 @@ async function read_templates() {
 }
 
 function expand_templates(res) {
-	var templateVars = _.clone(HOT);
+	const templateVars = _.clone(HOT);
 	_.extend(templateVars, require('../imager/config'));
 	_.extend(templateVars, config);
+	// remove secrets
+	for (let key of Object.keys(templateVars))
+		if (/(SECRET|SECURE|PRIVATE)/.test(key))
+			delete templateVars[key];
 
 	function tmpl(data) {
-		var expanded = _.template(data, templateVars);
+		const expanded = _.template(data, templateVars);
 		return {tmpl: expanded.split(/\$[A-Z]+/),
 			src: expanded};
 	}
 
-	var ex = {
+	const ex = {
 		navigationHtml: make_navigation_html(),
 		filterTmpl: tmpl(res.filter).tmpl,
 		curfewTmpl: tmpl(res.curfew).tmpl,
@@ -124,9 +128,9 @@ function expand_templates(res) {
 		serverErrorHtml: res.serverError,
 	};
 
-	var index = tmpl(res.index);
+	const index = tmpl(res.index);
 	ex.indexTmpl = index.tmpl;
-	var hash = crypto.createHash('md5').update(index.src);
+	const hash = crypto.createHash('md5').update(index.src);
 	ex.indexHash = hash.digest('hex').slice(0, 8);
 
 	return ex;
@@ -144,7 +148,7 @@ function make_navigation_html() {
 	if (!HOT.INTER_BOARD_NAVIGATION)
 		return '';
 	const bits = ['<nav>['];
-	config.BOARDS.forEach(function (board, i) {
+	config.BOARDS.forEach((board, i) => {
 		if (board == config.STAFF_BOARD)
 			return;
 		if (i > 0)

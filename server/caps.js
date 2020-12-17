@@ -4,7 +4,7 @@ const authcommon = require('../admin/common'),
     curfew = require('../curfew/server'),
     db = require('../db');
 
-var RANGES = require('./state').dbCache.ranges;
+const RANGES = require('./state').dbCache.ranges;
 
 function can_access_board(ident, board) {
 	if (board == 'graveyard' && can_administrate(ident))
@@ -20,12 +20,12 @@ function can_access_board(ident, board) {
 exports.can_access_board = can_access_board;
 
 exports.can_access_thread = function (ident, op) {
-	var tags = db.tags_of(op);
+	const tags = db.tags_of(op);
 	if (!tags)
 		return false;
-	for (var i = 0; i < tags.length; i++)
-		if (can_access_board(ident, tags[i]))
-			return tags[i];
+	for (let tag of tags)
+		if (can_access_board(ident, tag))
+			return tag;
 	return false;
 };
 
@@ -67,7 +67,7 @@ function dead_media_paths(paths) {
 }
 
 exports.augment_oneesama = function (oneeSama, opts) {
-	var ident = opts.ident;
+	const { board, ident } = opts;
 	oneeSama.ident = ident;
 	if (can_moderate(ident))
 		oneeSama.hook('headerName', authcommon.append_mnemonic);
@@ -75,7 +75,7 @@ exports.augment_oneesama = function (oneeSama, opts) {
 		oneeSama.hook('headerName', denote_priv);
 		oneeSama.hook('headerName', authcommon.denote_hidden);
 	}
-	if (can_administrate(ident) && opts.board == 'graveyard')
+	if (can_administrate(ident) && board == 'graveyard')
 		oneeSama.hook('mediaPaths', dead_media_paths);
 };
 
@@ -83,34 +83,36 @@ exports.mod_handler = function (func) {
 	return function (nums, client) {
 		if (!can_moderate(client.ident))
 			return false;
-		var opts = nums.shift();
+		const opts = nums.shift();
 		if (!check({when: 'string'}, opts) || !check('id...', nums))
 			return false;
-		if (!(opts.when in authcommon.delayDurations))
+		const { when } = opts;
+		if (!(when in authcommon.delayDurations))
 			return false;
-		var delay = authcommon.delayDurations[opts.when];
+		const delay = authcommon.delayDurations[when];
 		if (!delay)
 			func(nums, client);
 		else
 			setTimeout(func.bind(null, nums, client), delay*1000);
+		// TODO this ought to return a promise...
 		return true;
 	};
 };
 
 function parse_ip(ip) {
-	var m = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)(?:\/(\d+))?$/);
+	const m = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)(?:\/(\d+))?$/);
 	if (!m)
 		return false;
 	// damn you signed int32s!
-	var num = 0;
-	for (var i = 4, shift = 1; i > 0; i--) {
+	let num = 0;
+	for (let i = 4, shift = 1; i > 0; i--) {
 		num += parseInt(m[i], 10) * shift;
 		shift *= 256;
 	}
 
-	var info = {full: ip, num: num};
+	const info = {full: ip, num};
 	if (m[5]) {
-		var bits = parseInt(m[5], 10);
+		const bits = parseInt(m[5], 10);
 		if (bits > 0 && bits <= 32) {
 			info.mask = 0x100000000 - Math.pow(2, 32 - bits);
 			info.num &= info.mask;
@@ -122,7 +124,7 @@ function parse_ip(ip) {
 function parse_ranges(ranges) {
 	if (!ranges)
 		return [];
-	ranges = ranges.map(function (o) {
+	ranges = ranges.map(o => {
 		if (typeof o == 'object') {
 			o.ip = parse_ip(o.ip);
 			return o;
@@ -138,12 +140,12 @@ function range_lookup(ranges, num) {
 	if (!ranges)
 		return null;
 	/* Ideally would have a tree lookup here or something */
-	var result = null;
-	for (var i = 0; i < ranges.length; i++) {
-		var box = ranges[i].ip;
+	let result = null;
+	for (let range of ranges) {
+		const box = range.ip;
 		/* sint32 issue here doesn't matter for realistic ranges */
 		if ((box.mask ? (num & box.mask) : num) === box.num)
-			result = ranges[i];
+			result = range;
 		/* don't break out of loop */
 	}
 	return result;
@@ -177,14 +179,14 @@ function parse_suspensions(suspensions) {
 }
 
 exports.lookup_ident = function (ip, country) {
-	var ident = {ip, country, readOnly: config.READ_ONLY};
+	const ident = {ip, country, readOnly: config.READ_ONLY};
 	if (country
 		&& config.RESTRICTED_COUNTRIES
 		&& config.RESTRICTED_COUNTRIES.includes(country)) {
 		ident.readOnly = true;
 	}
-	var num = parse_ip(ip).num;
-	var ban = range_lookup(RANGES.bans, num);
+	const num = parse_ip(ip).num;
+	let ban = range_lookup(RANGES.bans, num);
 	if (ban) {
 		ident.ban = ban.ip.full;
 		return ident;
@@ -195,17 +197,17 @@ exports.lookup_ident = function (ip, country) {
 		ident.timeout = true;
 		return ident;
 	}
-	var suspension = range_lookup(RANGES.suspensions, num);
+	const suspension = range_lookup(RANGES.suspensions, num);
 	if (suspension) {
 		ident.suspension = suspension;
 		return ident;
 	}
 
-	var priv = range_lookup(RANGES.boxes, num);
+	const priv = range_lookup(RANGES.boxes, num);
 	if (priv)
 		ident.priv = priv.ip.full;
 
-	var slow = range_lookup(RANGES.slows, num);
+	const slow = range_lookup(RANGES.slows, num);
 	if (slow)
 		ident.slow = slow;
 
