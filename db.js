@@ -6,7 +6,7 @@ const _ = require('./lib/underscore'),
     config = require('./config'),
     events = require('events'),
     fs = require('fs'),
-    ipUtils = require('ip'),
+    { isLoopback } = require('ip'),
     Muggle = require('./etc').Muggle,
     util = require('util'),
     winston = require('winston');
@@ -171,16 +171,16 @@ S.on_message = function (chan, msg) {
 	const kind = parse_number(m[2]);
 
 	if (extra && kind == common.INSERT_POST) {
-		// add ip to INSERT_POST
+		// horrifying hack: splice `ip` into INSERT_POST log
 		let m = msg.match(/^(\d+,2,\d+,{)(.+)$/);
 		if (m && extra.ip) {
 			if (/"ip":/.test(msg))
 				throw "`ip` in public pub " + chan;
-			msg = m[1] + '"ip":' + JSON.stringify(extra.ip) + ',' + m[2];
+			msg = `${m[1]}"ip":${JSON.stringify(extra.ip)},${m[2]}`;
 		}
 	}
 
-	this.emit('update', op, kind, '[[' + msg + ']]');
+	this.emit('update', op, kind, `[[${msg}]]`);
 };
 
 S.on_sub_error = function (err) {
@@ -389,9 +389,7 @@ exports.expiry_queue_key = expiry_queue_key;
 
 /* SOCIETY */
 
-exports.is_board = function (board) {
-	return config.BOARDS.indexOf(board) >= 0;
-};
+exports.is_board = (board) => config.BOARDS.includes(board);
 
 exports.UPKEEP_IDENT = {auth: 'Upkeep', ip: '127.0.0.1'};
 
@@ -494,63 +492,55 @@ function long_term_timeslot(when) {
 	return Math.floor(when / (1000 * 60 * 60 * 24));
 }
 
-Y.reserve_post = function (op, ip, callback) {
+Y.reserve_post = async function (op, ip) {
 	if (this.ident.readOnly)
-		return callback(Muggle("Can't post right now."));
+		throw Muggle("Can't post right now.");
 	const r = this.connect();
 
-	const reserve = () => {
-		r.incr('postctr', (err, num) => {
-			if (err)
-				return callback(err);
-			OPs[num] = op || num;
-			callback(null, num);
-		});
-	};
+	if (!isLoopback(ip)) {
+		const key = `ip:${ip}:throttle:`;
+		const now = Date.now();
+		const shortTermKey = key + short_term_timeslot(now);
+		const longTermKey = key + long_term_timeslot(now);
+		const [short, long] = await r.promise.mget([shortTermKey, longTermKey]);
+		if (short > config.SHORT_TERM_LIMIT || long > config.LONG_TERM_LIMIT)
+			throw Muggle('Reduce your speed.');
+	}
 
-	if (ipUtils.isLoopback(ip))
-		return reserve();
-
-	const key = 'ip:' + ip + ':throttle:';
-	const now = Date.now();
-	const shortTerm = key + short_term_timeslot(now);
-	const longTerm = key + long_term_timeslot(now);
-	r.mget([shortTerm, longTerm], (err, quants) => {
-		if (err)
-			return callback(Muggle("Limiter failure.", err));
-		if (quants[0] > config.SHORT_TERM_LIMIT || quants[1] > config.LONG_TERM_LIMIT)
-			return callback(Muggle('Reduce your speed.'));
-
-		reserve();
-	});
+	const num = await r.promise.incr('postctr');
+	OPs[num] = op || num;
+	return num;
 };
 
 const optPostFields = 'name trip email auth subject flavor'.split(' ');
 
-Y.insert_post = function (msg, body, extra, callback) {
+Y.insert_post = async function (msg, body, extra) {
 	if (this.ident.readOnly)
-		return callback(Muggle("Can't post right now."));
-	const r = this.connect();
-	if (!this.tag)
-		return callback(Muggle("Can't retrieve board for posting."));
-	let ip = extra.ip, board = extra.board, num = msg.num, op = msg.op;
+		throw Muggle("Can't post right now.");
+	// DRY what is the difference between extra.board and this.tag?
+	const { tag } = this;
+	if (!tag)
+		throw Muggle("Can't retrieve board for posting.");
+	const { ip, board } = extra;
+	let { num, op, time } = msg;
 	if (!num)
-		return callback(Muggle("No post num."));
+		throw Muggle("No post num.");
 	else if (!ip)
-		return callback(Muggle("No IP."));
+		throw Muggle("No IP.");
 	else if (op) {
 		if (OPs[op] != op || !OP_has_tag(board, op)) {
 			delete OPs[num];
-			return callback(Muggle('Thread does not exist.'));
+			throw Muggle('Thread does not exist.');
 		}
 	}
 
-	let view = {time: msg.time, ip: ip, state: msg.state.join()};
-	optPostFields.forEach(field => {
+	// make a fresh post object `view` to put post info into
+	const view = {time, ip, state: msg.state.join()};
+	for (let field of optPostFields) {
 		if (msg[field])
 			view[field] = msg[field];
-	});
-	const tagKey = 'tag:' + tag_key(this.tag);
+	}
+	const tagKey = `tag:${tag_key(tag)}`;
 	if (op)
 		view.op = op;
 	else {
@@ -562,12 +552,13 @@ Y.insert_post = function (msg, body, extra, callback) {
 	if (extra.image_alloc) {
 		msg.image = extra.image_alloc.image;
 		if (!op == msg.image.pinky)
-			return callback(Muggle("Image is the wrong size."));
+			throw Muggle("Image is the wrong size.");
 		delete msg.image.pinky;
 	}
 
 	const key = (op ? 'post:' : 'thread:') + num;
 	const bump = !op || !common.is_sage(view.email);
+	const r = this.connect();
 	const m = r.multi();
 	m.incr(tagKey + ':postctr'); // must be first
 	if (op)
@@ -576,6 +567,7 @@ Y.insert_post = function (msg, body, extra, callback) {
 		m.incr(tagKey + ':bumpctr');
 	m.sadd('liveposts', key);
 
+	// why do we flatten here and then, 50 lines later, re-hydrate?
 	flatten_post({src: msg, dest: view});
 
 	if (msg.image) {
@@ -583,8 +575,9 @@ Y.insert_post = function (msg, body, extra, callback) {
 			m.hincrby('thread:' + op, 'imgctr', 1);
 		else
 			view.imgctr = 1;
-		imager.note_hash(msg.image.hash, msg.num);
 		view.dims = view.dims.toString();
+		// tell the imager to remember this hash for duplicate checking
+		imager.note_hash(msg.image.hash, num);
 	}
 	m.hmset(key, view);
 	m.set(key + ':body', body);
@@ -592,17 +585,16 @@ Y.insert_post = function (msg, body, extra, callback) {
 		m.hmset(key + ':links', msg.links);
 
 	let etc = {cacheUpdate: {}};
-	let priv = this.ident.priv;
+	let { priv } = this.ident;
 	if (op) {
 		etc.ipNum = num;
 		etc.cacheUpdate.num = num;
-		const pre = 'thread:' + op;
 		if (priv) {
-			m.sadd(pre + ':privs', priv);
-			m.rpush(pre + ':privs:' + priv, num);
+			m.sadd(`thread:${op}:privs`, priv);
+			m.rpush(`thread:${op}:privs:${priv}`, num);
 		}
 		else
-			m.rpush(pre + ':posts', num);
+			m.rpush(`thread:${op}:posts`, num);
 	}
 	else {
 		// TODO: Add to alternate thread list?
@@ -610,13 +602,12 @@ Y.insert_post = function (msg, body, extra, callback) {
 		op = num;
 		if (!view.immortal) {
 			const score = expiry_queue_score(msg.time);
-			const entry = num + ':' + tag_key(this.tag);
+			const entry = `${num}:${tag_key(this.tag)}`;
 			m.zadd(expiry_queue_key(), score, entry);
 		}
 		/* Rate-limit new threads */
-		if (ipUtils.isLoopback(ip))
-			m.setex('ip:'+ip+':throttle:thread',
-					config.THREAD_THROTTLE, op);
+		if (!isLoopback(ip))
+			m.setex(`ip:${ip}:throttle:thread`, config.THREAD_THROTTLE, op);
 	}
 
 	/* Denormalize for backlog */
@@ -627,43 +618,32 @@ Y.insert_post = function (msg, body, extra, callback) {
 	hydrate_post(view);
 	delete view.ip;
 
-	async.waterfall([
-	next => {
-		if (!msg.image)
-			return next(null);
+	if (msg.image) {
+		await imager.commit_image_alloc(extra.image_alloc);
+	}
+	if (ip) {
+		const n = post_volume(view, body);
+		if (n > 0)
+			update_throughput(m, ip, view.time, n);
+		etc.ip = ip;
+	}
+	this._log(m, op, common.INSERT_POST, [num, view], etc);
 
-		imager.commit_image_alloc(extra.image_alloc).then(() => next(), next);
-	},
-	next => {
-		if (ip) {
-			const n = post_volume(view, body);
-			if (n > 0)
-				update_throughput(m, ip, view.time, n);
-			etc.ip = ip;
+	try {
+		const [postctr, subject_get] = await m.promise.exec();
+		if (bump) {
+			const subject = subject_val(op, op==num ? view.subject : subject_get);
+			const m = r.multi();
+			m.zadd(tagKey + ':threads', postctr, op);
+			if (subject)
+				m.zadd(tagKey + ':subjects', postctr, subject);
+			await m.promise.exec();
 		}
-
-		this._log(m, op, common.INSERT_POST, [num, view], etc);
-
-		m.exec(next);
-	},
-	(results, next) => {
-		if (!bump)
-			return next();
-		let postctr = results[0];
-		const subject = subject_val(op, op==num ? view.subject : results[1]);
-		const m = r.multi();
-		m.zadd(tagKey + ':threads', postctr, op);
-		if (subject)
-			m.zadd(tagKey + ':subjects', postctr, subject);
-		m.exec(next);
-	}],
-	err => {
-		if (err) {
-			delete OPs[num];
-			return callback(err);
-		}
-		callback(null);
-	});
+	}
+	catch (err) {
+		delete OPs[num];
+		throw err;
+	}
 };
 
 /// Weird interface.
@@ -770,10 +750,10 @@ Y.remove_thread = async function (op) {
 		const expiryKey = expiry_queue_key();
 		for (let tag of tags) {
 			const tagKey = tag_key(tag);
-			m.zrem(expiryKey, op + ':' + tagKey);
-			m.zrem('tag:' + tagKey + ':threads', op);
+			m.zrem(expiryKey, `${op}:${tagKey}`);
+			m.zrem(`tag:${tagKey}:threads`, op);
 			if (subject)
-				m.zrem('tag:' + tagKey + ':subjects', subject);
+				m.zrem(`tag:${tagKey}:subjects`, subject);
 		}
 		m.zadd(graveyardKey + ':threads', deadCtr, op);
 		opts.tags = tags;
@@ -1017,23 +997,17 @@ function warn(err) {
 		winston.warn('Warning: ' + err);
 }
 
-Y.check_thread_locked = function (op, callback) {
-	this.connect().hexists('thread:' + op, 'locked', (err, lock) => {
-		if (err)
-			callback(err);
-		else
-			callback(lock ? Muggle('Thread is locked.') : null);
-	});
+Y.check_thread_locked = async function (op) {
+	const lock = await this.connect().promise.hexists(`thread:${op}`, 'locked');
+	if (lock)
+		throw Muggle(`Thread >>${op} is locked.`);
 };
 
-Y.check_throttle = function (ip, callback) {
-	const key = 'ip:' + ip + ':throttle:thread';
-	this.connect().exists(key, (err, exists) => {
-		if (err)
-			callback(err);
-		else
-			callback(exists ? Muggle('Too soon.') : null);
-	});
+Y.check_new_thread_throttle = async function (ip) {
+	const key = `ip:${ip}:throttle:thread`;
+	const exists = await this.connect().promise.exists(key);
+	if (exists)
+		throw Muggle('Too soon. Try again later.');
 };
 
 Y.add_image = function (post, alloc, ip, callback) {

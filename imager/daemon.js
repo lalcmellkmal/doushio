@@ -385,7 +385,7 @@ IU.verify_image = async function () {
 	if (h > config.IMAGE_HEIGHT_MAX)
 		throw Muggle(`${desc} is too tall.`);
 
-	const hash = await perceptual_hash(tagged_path, image);	
+	const hash = await perceptual_hash(tagged_path, image);
 	await this.db.check_duplicate(hash);
 	image.hash = hash;
 
@@ -744,7 +744,7 @@ IU.record_image = async function (tmps) {
 	view.pinky = image.pinky;
 	const image_id = etc.random_id().toFixed();
 	const alloc = {image: view, tmps};
-	
+
 	try {
 		await this.db.record_image_alloc(image_id, alloc);
 	}

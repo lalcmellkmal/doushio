@@ -713,18 +713,18 @@ web.route_get_auth(/^\/dead\/(src|thumb|mid)\/(\w+\.\w{3})$/,
 });
 
 
-/* Must be prepared to receive callback instantly */
-function valid_links(frag, state, ident, callback) {
+function valid_links(frag, state, ident) {
 	const links = {};
-	const onee = new OneeSama(function (num) {
+	// use a short-lived OneeSama to populate `ident` with all the >>links in `frag`
+	const onee = new OneeSama(num => {
 		const op = db.OPs[num];
 		if (op && caps.can_access_thread(ident, op))
 			links[num] = db.OPs[num];
 	});
-	onee.callback = function (frag) {};
+	onee.callback = (frag) => {};
 	onee.state = state;
 	onee.fragment(frag);
-	callback(null, _.isEmpty(links) ? null : links);
+	return _.isEmpty(links) ? null : links;
 }
 
 const insertSpec = [{
@@ -755,11 +755,9 @@ dispatcher[common.INSERT_POST] = function (msg, client) {
 	if (config.DEBUG)
 		debug_command(client, frag);
 
-	allocate_post(msg, client, (err) => {
-		if (err)
-			client.kotowaru(Muggle("Allocation failure.", err));
+	return allocate_post(msg, client).catch(err => {
+		client.kotowaru(err);
 	});
-	return true;
 }
 
 function inactive_board_check(client) {
@@ -768,39 +766,41 @@ function inactive_board_check(client) {
 	return !['graveyard', 'archive'].includes(client.board);
 }
 
-function allocate_post(msg, client, callback) {
+async function allocate_post(msg, client) {
 	if (client.post)
-		return callback(Muggle("Already have a post."));
+		throw Muggle("Already have a post.");
 	if (!inactive_board_check(client))
-		return callback(Muggle("Can't post here."));
+		throw Muggle("Can't post here.");
 	const post = {time: Date.now(), nonce: msg.nonce};
-	let body = '';
-	const { ip } = client.ident;
-	const extra = {ip, board: client.board};
+	const { board, ident } = client;
+	const { ip } = ident;
 	let image_alloc;
 	if (msg.image) {
 		if (!/^\d+$/.test(msg.image))
-			return callback(Muggle('Expired image token.'));
+			throw Muggle('Expired image token.');
 		image_alloc = msg.image;
 	}
+	let body = '';
 	if (msg.frag) {
 		if (/^\s*$/g.test(msg.frag))
-			return callback(Muggle('Bad post body.'));
+			throw Muggle('Bad post body.');
 		if (msg.frag.length > common.MAX_POST_CHARS)
-			return callback(Muggle('Post is too long.'));
+			throw Muggle('Post is too long.');
 		body = msg.frag.replace(config.EXCLUDE_REGEXP, '');
 	}
 
-	if (msg.op) {
-		if (db.OPs[msg.op] != msg.op)
-			return callback(Muggle('Thread does not exist.'));
-		if (!db.OP_has_tag(extra.board, msg.op))
-			return callback(Muggle('Thread does not exist.'));
-		post.op = msg.op;
+	const { op } = msg;
+	if (op) {
+		if (db.OPs[op] != op)
+			throw Muggle('Thread does not exist.');
+		if (!db.OP_has_tag(board, op))
+			throw Muggle('Wrong board for thread.');
+		post.op = op;
 	}
 	else {
+		// new threads must have an image
 		if (!image_alloc)
-			return callback(Muggle('Image missing.'));
+			throw Muggle('Image missing.');
 		let subject = (msg.subject || '').trim();
 		subject = subject.replace(config.EXCLUDE_REGEXP, '');
 		subject = subject.replace(/[「」]/g, '');
@@ -835,69 +835,52 @@ function allocate_post(msg, client, callback) {
 	post.state = common.initial_state();
 
 	if ('auth' in msg) {
-		if (!msg.auth || !client.ident || msg.auth !== client.ident.auth)
-			return callback(Muggle('Bad auth.'));
+		if (!msg.auth || !ident || msg.auth !== ident.auth)
+			throw Muggle('Bad auth.');
 		post.auth = msg.auth;
 	}
 
-	if (post.op)
-		client.db.check_thread_locked(post.op, checked);
+	if (op)
+		await client.db.check_thread_locked(op);
 	else
-		client.db.check_throttle(ip, checked);
+		await client.db.check_new_thread_throttle(ip);
 
-	function checked(err) {
-		if (err)
-			return callback(err);
-		client.db.reserve_post(post.op, ip, got_reservation);
-	}
+	// note: `reserve_post` checks the words-per-timeslot rate limiter
+	const num = await client.db.reserve_post(op, ip);
+	post.num = num;
 
-	function got_reservation(err, num) {
-		if (err)
-			return callback(err);
-		if (!client.synced)
-			return callback(Muggle('Dropped; post aborted.'));
-		if (client.post)
-			return callback(Muggle('Already have a post.'));
+	if (!client.synced)
+		throw Muggle('Dropped; post aborted.');
+	// sort-of guard against a race condition here
+	if (client.post)
+		throw Muggle('Already have a post.');
 
-		if (body.length && is_game_board(client.board))
-			amusement.roll_dice(body, post, extra);
+	const links = valid_links(body, post.state, ident);
+	if (links)
+		post.links = links;
 
-		client.post = post;
-		post.num = num;
-		const supplements = {
-			links: valid_links.bind(null, body, post.state, client.ident),
-		};
-		if (image_alloc)
-			supplements.image = (cb) => {
-				imager.obtain_image_alloc(image_alloc)
-					.then(image => cb(null, image))
-					.catch(err => cb(err));
-			};
-		async.parallel(supplements, got_supplements);
-	}
-	function got_supplements(err, rs) {
-		if (err) {
-			if (client.post === post)
-				client.post = null;
-			return callback(Muggle("Attachment error.", err));
+	const extra = {ip, board};
+	if (body.length && is_game_board(board))
+		amusement.roll_dice(body, post, extra);
+
+	client.post = post;
+	try {
+		if (image_alloc) {
+			const image = await imager.obtain_image_alloc(image_alloc);
+			if (image)
+				extra.image_alloc = image;
 		}
 		if (!client.synced)
-			return callback(Muggle('Dropped; post aborted.'));
-		post.links = rs.links;
-		if (rs.image)
-			extra.image_alloc = rs.image;
-		client.db.insert_post(post, body, extra, inserted);
-	}
-	function inserted(err) {
-		if (err) {
-			if (client.post === post)
-				client.post = null;
-			return callback(Muggle("Couldn't allocate post.",err));
-		}
+			throw Muggle('Dropped; post aborted.');
+
+		await client.db.insert_post(post, body, extra);
 		post.body = body;
-		callback(null);
 	}
-	return true;
+	catch (err) {
+		if (client.post === post)
+			client.post = null;
+		throw err;
+	}
 }
 
 function update_post(frag, client) {
@@ -922,28 +905,26 @@ function update_post(frag, client) {
 	/* imporant: broadcast prior state */
 	const old_state = post.state.slice();
 
-	valid_links(frag, post.state, client.ident, (err, links) => {
-		if (err)
-			links = null; /* oh well */
-		if (links) {
-			if (!post.links)
-				post.links = {};
-			const new_links = {};
-			for (let k in links) {
-				const link = links[k];
-				if (post.links[k] != link) {
-					post.links[k] = link;
-					new_links[k] = link;
-				}
+	const links = valid_links(frag, post.state, client.ident);
+	if (links) {
+		if (!post.links)
+			post.links = {};
+		// TODO wtf use Maps instead
+		const new_links = {};
+		for (let k in links) {
+			const link = links[k];
+			if (post.links[k] != link) {
+				post.links[k] = link;
+				new_links[k] = link;
 			}
-			extra.links = links;
-			extra.new_links = new_links;
 		}
+		extra.links = links;
+		extra.new_links = new_links;
+	}
 
-		client.db.append_post(post, frag, old_state, extra, err => {
-			if (err)
-				client.kotowaru(Muggle("Couldn't add text.", err));
-		});
+	client.db.append_post(post, frag, old_state, extra, err => {
+		if (err)
+			client.kotowaru(Muggle("Couldn't add text.", err));
 	});
 	return true;
 }
