@@ -216,6 +216,7 @@ if (!imager.is_standalone()) {
 	web.route_post(/^\/upload\/$/, require('../imager/daemon').new_upload);
 }
 
+/// site root
 web.resource(/^\/$/, function (req, cb) {
 	cb(null, 'redirect', config.DEFAULT_BOARD + '/');
 });
@@ -258,6 +259,7 @@ ${RES.modJs};
 })(${JSON.stringify(ident)});`);
 }
 
+/// provide admin client js
 web.resource_auth(/^\/admin\.js$/, (req, cb) => {
 	if (!caps.can_administrate(req.ident))
 		cb(404);
@@ -280,6 +282,7 @@ web.resource_auth(/^\/mod\.js$/, (req, cb) => {
 	write_mod_js(resp, { auth, csrf, user });
 });
 
+/// view board index
 web.resource(/^\/(\w+)$/, function (req, params, cb) {
 	const board = params[1];
 	/* If arbitrary boards were allowed, need to escape this: */
@@ -348,6 +351,7 @@ function (req, resp) {
 	});
 });
 
+/// view page of board
 web.resource(/^\/(\w+)\/page(\d+)$/, function (req, params, cb) {
 	const board = params[1];
 	if (!caps.temporal_access_check(req.ident, board))
@@ -409,6 +413,7 @@ web.resource(/^\/(\w+)\/page(\d+)\/$/, (req, params, cb) => {
 		cb(null, 'redirect', '../page' + params[2]);
 });
 
+/// view thread
 web.resource(/^\/(\w+)\/(\d+)$/, function (req, params, cb) {
 	const board = params[1];
 	if (!caps.temporal_access_check(req.ident, board))

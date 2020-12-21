@@ -42,6 +42,7 @@ const server = require('http').createServer((req, resp) => {
 });
 exports.server = server;
 
+/// main request router
 function handle_request(req, resp) {
 	const method = req.method.toLowerCase();
 	// chop the query string off of `req.url`
@@ -59,16 +60,21 @@ function handle_request(req, resp) {
 			// dispatch this route!
 			route.handler(req, resp, m);
 			if (config.DEBUG)
-				winston.verbose(route.method.toUpperCase() + ' ' + req.url);
+				winston.verbose(`${route.method.toUpperCase()} ${req.url}`);
 			return;
 		}
 	}
 
 	// otherwise, try the resource-based handlers
-	if (method == 'get' || method == 'head')
-		for (let resource of resources)
-			if (handle_resource(req, resp, resource))
+	if (method == 'get' || method == 'head') {
+		for (let resource of resources) {
+			const m = req.url.match(resource.pattern);
+			if (m) {
+				handle_resource(req, resp, resource, m);
 				return;
+			}
+		}
+	}
 
 	if (config.SERVE_IMAGES) {
 		if (require('../imager').serve_image(req, resp))
@@ -86,13 +92,21 @@ function handle_request(req, resp) {
 		winston.verbose(`404 ${req.url} fallthrough`);
 }
 
-function handle_resource(req, resp, resource) {
-	const m = req.url.match(resource.pattern);
-	if (!m)
-		return false;
+/// when you register an HTTP resource with `web.resource` this code dispatches it.
+/// by the way: web.resource accepts two or three function parameters
+/// they are `head`, `get` (AKA the body), and optionally `tear_down`
+///
+/// when a request comes in that matches `resource.pattern`,
+/// the `head` callback is called with the request header
+/// `head` is allowed to finish the response early with redirects, errors, etc.
+/// otherwise, if request.method != "HEAD", the main `get` handler is called
+/// `get` is where the meat of the response lives.
+/// optionally, after the response ends, if it was a 200, `tear_down` happens.
+function handle_resource(req, resp, resource, params) {
 	const args = [req];
 	if (resource.headParams)
-		args.push(m);
+		args.push(params);
+	// here's where we pass the HEAD handler's callback
 	args.push(resource_second_handler.bind(null, req, resp, resource));
 
 	const cookie = auth.extract_login_cookie(req.cookies);
@@ -121,7 +135,7 @@ function handle_resource(req, resp, resource) {
 // this is the callback passed to the first half of a web `resource`
 // it passes control to the second half of the resource
 function resource_second_handler(req, resp, resource, err, act, arg) {
-	const method = req.method.toLowerCase();
+	const method = req.method.toUpperCase();
 	const log = config.DEBUG;
 	if (err) {
 		if (err == 404) {
@@ -135,10 +149,10 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 			winston.verbose(`500 ${req.url}`);
 		return render_500(resp);
 	}
-	else if (act == 'ok') {
+	else if (act == 'ok' || act == 200) {
 		if (log)
-			winston.verbose(`${method.toUpperCase()} ${req.url} 200`);
-		if (method == 'head') {
+			winston.verbose(`${method} ${req.url} 200`);
+		if (method == 'HEAD') {
 			const headers = (arg && arg.headers) || noCacheHeaders;
 			resp.writeHead(200, headers);
 			resp.end();
@@ -176,7 +190,7 @@ function resource_second_handler(req, resp, resource, err, act, arg) {
 	else if (act == 'redirect_js') {
 		if (log)
 			winston.verbose(`303.js ${req.url} to ${arg}`);
-		if (method == 'head') {
+		if (method == 'HEAD') {
 			resp.writeHead(303, {Location: arg});
 			resp.end();
 		}
@@ -192,6 +206,7 @@ exports.route_get = function (pattern, handler) {
 	routes.push({method: 'get', pattern, handler});
 };
 
+/// `web.resource` registration function
 exports.resource = function (pattern, head, get, tear_down) {
 	if (head === true)
 		head = (req, cb) => { cb(null, 'ok'); };
