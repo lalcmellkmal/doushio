@@ -59,7 +59,8 @@ OK.on_thread_sink = function (thread, err) {
 
 const WORMHOLES = [common.SYNCHRONIZE, common.FINISH_POST];
 
-OK.on_message = function (data) {
+// websocket data arrives here
+OK.on_message = async function (data) {
 	let msg;
 	try { msg = JSON.parse(data); }
 	catch (e) {}
@@ -75,10 +76,15 @@ OK.on_message = function (data) {
 	if (this.blackhole && !WORMHOLES.includes(type))
 		return;
 	const func = dispatcher[type];
-	if (!func || !func(msg, this)) {
-		// TODO: handle properly if `func` returns a promise
-		const error = new Error(`Invalid message: ${JSON.stringify(data)}`);
-		this.kotowaru(Muggle("Bad protocol.", error));
+	try {
+		const result = func && func(msg, this);
+		if (!result || await Promise.resolve(result) === false) {
+			const error = new Error(`Message rejected: ${JSON.stringify(data)}`);
+			throw Muggle("Bad protocol.", error);
+		}
+	}
+	catch (err) {
+		this.kotowaru(err);
 	}
 };
 
@@ -135,7 +141,8 @@ OK.kotowaru = function (error) {
 		msg = error.most_precise_error_message();
 		error = error.deepest_reason();
 	}
-	winston.error(`Error by ${JSON.stringify(this.ident)}: ${error || msg}`);
+	winston.error(`Error by ${JSON.stringify(this.ident)}:`);
+	winston.error(error || msg);
 	this.send([0, common.INVALID, msg]);
 	this.synced = false;
 };

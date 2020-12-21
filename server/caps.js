@@ -91,13 +91,15 @@ exports.mod_handler = function (func) {
 			return false;
 		const delay = authcommon.delayDurations[when];
 		if (!delay)
-			func(nums, client);
-		else
-			setTimeout(func.bind(null, nums, client), delay*1000);
-		// TODO this ought to return a promise...
-		return true;
+			return func(nums, client);
+		return (async () => {
+			await pause(delay * 1000);
+			return func(nums, client);
+		})();
 	};
 };
+
+const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function parse_ip(ip) {
 	const m = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)(?:\/(\d+))?$/);
