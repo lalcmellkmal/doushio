@@ -16,8 +16,7 @@ const _ = require('../lib/underscore'),
     db = require('../db'),
     fs = require('fs'),
     imager = require('../imager'),
-    etc = require('../etc'),
-    Muggle = etc.Muggle,
+    { Muggle, json_paranoid } = require('../etc'),
     { Okyaku, dispatcher, scan_client_caps } = require('./okyaku'),
     render = require('./render'),
     fetch = require('node-fetch'),
@@ -585,7 +584,7 @@ function make_init_script(ident) {
 	if (authTag.length != 16)
 		throw 'auth tag of unexpected length';
 	const combined = iv.toString('hex') + authTag.toString('hex') + crypted;
-	return `\t<script>const ctoken = ${etc.json_paranoid(combined)};</script>\n`;
+	return `\t<script>const ctoken = ${json_paranoid(combined)};</script>\n`;
 }
 
 function decrypt_ctoken(ctoken) {
@@ -765,17 +764,9 @@ dispatcher[common.INSERT_POST] = function (msg, client) {
 	});
 }
 
-function inactive_board_check(client) {
-	if (caps.can_administrate(client.ident))
-		return true;
-	return !['graveyard', 'archive'].includes(client.board);
-}
-
 async function allocate_post(msg, client) {
 	if (client.post)
 		throw Muggle("Already have a post.");
-	if (!inactive_board_check(client))
-		throw Muggle("Can't post here.");
 	const post = {time: Date.now(), nonce: msg.nonce};
 	const { board, ident } = client;
 	const { ip } = ident;
@@ -956,9 +947,7 @@ dispatcher[common.FINISH_POST] = function (msg, client) {
 	return true;
 }
 
-dispatcher[common.DELETE_POSTS] = caps.mod_handler((nums, client) => {
-	if (!inactive_board_check(client))
-		return client.kotowaru(Muggle("Couldn't delete."));
+dispatcher[common.DELETE_POSTS] = caps.mod_handler(async (nums, client) => {
 	/* Omit to-be-deleted posts that are inside to-be-deleted threads */
 	const ops = {};
 	const { OPs } = db;
@@ -967,29 +956,18 @@ dispatcher[common.DELETE_POSTS] = caps.mod_handler((nums, client) => {
 			ops[num] = 1;
 	}
 	nums = nums.filter(num => (OPs[num] == num || !(OPs[num] in ops)));
-
-	client.db.remove_posts(nums, (err, dels) => {
-		if (err)
-			client.kotowaru(Muggle("Couldn't delete.", err));
-	});
+	await client.db.remove_posts(nums);
 });
 
-dispatcher[common.LOCK_THREAD] = caps.mod_handler((nums, client) => {
-	if (!inactive_board_check(client))
-		return client.kotowaru(Muggle("Couldn't (un)lock thread."));
+dispatcher[common.LOCK_THREAD] = caps.mod_handler(async (nums, client) => {
 	nums = nums.filter(op => db.OPs[op] == op);
-	async.forEach(nums, client.db.toggle_thread_lock.bind(client.db), (err) => {
-		if (err)
-			client.kotowaru(Muggle("Couldn't (un)lock thread.", err));
-	});
+	for (let num of nums) {
+		await client.db.toggle_thread_lock(num);
+	}
 });
 
-dispatcher[common.DELETE_IMAGES] = caps.mod_handler((nums, client) => {
-	if (!inactive_board_check(client))
-		return client.kotowaru(Muggle("Couldn't delete images."));
-	client.db
-		.remove_images(nums)
-		.catch(err => { client.kotowaru(Muggle("Couldn't delete images.", err)) });
+dispatcher[common.DELETE_IMAGES] = caps.mod_handler(async (nums, client) => {
+	await client.db.remove_images(nums);
 });
 
 dispatcher[common.INSERT_IMAGE] = function (msg, client) {
@@ -1013,14 +991,7 @@ dispatcher[common.INSERT_IMAGE] = function (msg, client) {
 };
 
 dispatcher[common.SPOILER_IMAGES] = caps.mod_handler(async (nums, client) => {
-	try {
-		if (!inactive_board_check(client))
-			throw new Error("Can't modify that board.");
-		await client.db.force_image_spoilers(nums);
-	}
-	catch (err) {
-		client.kotowaru(Muggle("Couldn't spoiler images.", err));
-	}
+	await client.db.force_image_spoilers(nums);
 });
 
 dispatcher[common.EXECUTE_JS] = function (msg, client) {

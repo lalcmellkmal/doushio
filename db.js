@@ -973,25 +973,22 @@ Y.force_image_spoilers = async function (nums) {
 	await m.promise.exec();
 };
 
-Y.toggle_thread_lock = function (op, callback) {
+Y.toggle_thread_lock = async function (op) {
 	if (this.ident.readOnly)
-		return callback(Muggle("Read-only right now."));
+		throw Muggle("Read-only right now.");
 	if (OPs[op] != op)
-		return callback(Muggle('Thread does not exist.'));
+		throw Muggle('Thread does not exist.');
 	const r = this.connect();
 	const key = 'thread:' + op;
-	r.hexists(key, 'locked', (err, locked) => {
-		if (err)
-			return callback(err);
-		const m = r.multi();
-		if (locked)
-			m.hdel(key, 'locked');
-		else
-			m.hset(key, 'locked', '1');
-		const act = locked ? common.UNLOCK_THREAD : common.LOCK_THREAD;
-		this._log(m, op, act, []);
-		m.exec(callback);
-	});
+	const locked = await r.promise.hexists(key, 'locked');
+	const m = r.multi();
+	if (locked)
+		m.hdel(key, 'locked');
+	else
+		m.hset(key, 'locked', '1');
+	const act = locked ? common.UNLOCK_THREAD : common.LOCK_THREAD;
+	this._log(m, op, act, []);
+	await m.promise.exec();
 };
 
 /* END BOILERPLATE CITY */

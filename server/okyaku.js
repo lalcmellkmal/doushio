@@ -78,7 +78,7 @@ OK.on_message = async function (data) {
 	const func = dispatcher[type];
 	try {
 		const result = func && func(msg, this);
-		if (!result || await Promise.resolve(result) === false) {
+		if (!result || (await Promise.resolve(result)) === false) {
 			const error = new Error(`Message rejected: ${JSON.stringify(data)}`);
 			throw Muggle("Bad protocol.", error);
 		}

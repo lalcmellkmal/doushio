@@ -2,7 +2,8 @@ const authcommon = require('../admin/common'),
     check = require('./msgcheck').check,
     config = require('../config'),
     curfew = require('../curfew/server'),
-    db = require('../db');
+    db = require('../db'),
+    { Muggle } = require('../etc');
 
 const RANGES = require('./state').dbCache.ranges;
 
@@ -83,6 +84,10 @@ exports.mod_handler = function (func) {
 	return function (nums, client) {
 		if (!can_moderate(client.ident))
 			return false;
+		if (!can_administrate(client.ident)) {
+			if (['graveyard', 'archive'].includes(client.board))
+				throw new Muggle("Can't modify this board.");
+		}
 		const opts = nums.shift();
 		if (!check({when: 'string'}, opts) || !check('id...', nums))
 			return false;
@@ -215,5 +220,3 @@ exports.lookup_ident = function (ip, country) {
 
 	return ident;
 };
-
-
