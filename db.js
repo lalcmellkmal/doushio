@@ -146,6 +146,10 @@ S.on_all_subs = function () {
 	delete this.subscription_callbacks;
 };
 
+function length_prefixed(str) {
+	return `${str.length}|${str}`;
+}
+
 function parse_pub_message(msg) {
 	const m = msg.match(/^(\d+)\|/);
 	const prefixLen = m[0].length;
@@ -1145,35 +1149,37 @@ Y.finish_all = function (callback) {
 Y._log = function (m, op, kind, msg, opts) {
 	opts = opts || {};
 	msg = JSON.stringify(msg).slice(1, -1);
-	msg = msg.length ? (kind + ',' + msg) : ('' + kind);
-	winston.info("Log: " + msg);
+	msg = msg.length ? `${kind},${msg}` : ('' + kind);
+	winston.info(`Log: ${msg}`);
 	if (!op)
 		throw new Error('No OP.');
-	const priv = this.ident.priv;
-	const prefix = priv ? ('priv:' + priv + ':') : '';
-	const key = prefix + 'thread:' + op;
+	const { priv } = this.ident;
+	const prefix = priv ? `priv:${priv}:` : '';
+	const key = `${prefix}thread:${op}`;
 
 	if (common.is_pubsub(kind)) {
 		m.rpush(key + ':history', msg);
 		m.hincrby(key, 'hctr', 1);
 	}
-	if (opts.ipNum)
-		m.hset(key + ':ips', opts.ipNum, opts.ip);
+	const { ip, ipNum } = opts;
+	if (ipNum)
+		m.hset(key + ':ips', ipNum, ip);
 
-	const opBit = op + ',';
-	const len = opBit.length + msg.length;
-	msg = len + '|' + opBit + msg;
+	// format `msg` for inclusion in the log
+	msg = length_prefixed(`${op},${msg}`);
 
 	// we can add an extra trailing message for secret info
-	if (opts.ip)
-		msg += JSON.stringify({auth: {ip: opts.ip}});
+	if (ip)
+		msg += JSON.stringify({auth: {ip}});
 
 	m.publish(key, msg);
 	const tags = opts.tags || (this.tag ? [this.tag] : []);
-	tags.forEach(tag => m.publish(prefix + 'tag:' + tag, msg));
+	for (let tag of tags) {
+		m.publish(`${prefix}tag:${tag}`, msg);
+	}
 
 	if (opts.cacheUpdate) {
-		const info = {kind: kind, tag: tags[0], op: op};
+		const info = {kind, tag: tags[0], op};
 		_.extend(info, opts.cacheUpdate);
 		m.publish('cache', JSON.stringify(info));
 	}
