@@ -1,15 +1,15 @@
-var _ = require('../lib/underscore'),
+const _ = require('../lib/underscore'),
     config = require('../config'),
     db = require('../db'),
     web = require('../server/web'),
     winston = require('winston');
 
-var RES = require('../server/state').resources;
+const RES = require('../server/state').resources;
 
 exports.divert_response = function (board, resp) {
 	resp.writeHead(200, web.noCacheHeaders);
 	resp.write(RES.curfewTmpl[0]);
-	resp.write('/' + board + '/');
+	resp.write(`/${board}/`);
 	resp.write(RES.curfewTmpl[1]);
 	const ending = curfew_ending_time(board);
 	resp.write(ending ? ''+ending.getTime() : 'null');
@@ -84,35 +84,37 @@ function day_after(today) {
 }
 
 function hour_date_maker(date) {
-	const prefix = date.getUTCFullYear() + '/' + (date.getUTCMonth()+1)
-			+ '/' + date.getUTCDate() + ' ';
-	return hour => new Date(prefix + hour + ':00:00 GMT');
+	const prefix = `${date.getUTCFullYear()}/${date.getUTCMonth()+1}/${date.getUTCDate()} `;
+	return hour => new Date(`${prefix}${hour}:00:00 GMT`);
 }
 
 /* DAEMON */
 
-function shutdown(board, cb) {
-	var yaku = new db.Yakusoku(board, db.UPKEEP_IDENT);
-	yaku.teardown(board, function (err) {
+async function shutdown(board) {
+	const yaku = new db.Yakusoku(board, db.UPKEEP_IDENT);
+	try {
+		await yaku.teardown(board);
+	}
+	finally {
 		yaku.disconnect();
-		cb(err);
-	});
+	}
 }
 
 function at_next_curfew_start(board, func) {
-	var when = curfew_starting_time(board);
-	winston.info('Next curfew for ' + board + ' at ' + when.toUTCString());
+	const when = curfew_starting_time(board);
+	winston.info(`Next curfew for ${board} at ${when.toUTCString()}`);
 	setTimeout(func, when.getTime() - Date.now());
 }
 
 function enforce(board) {
-	at_next_curfew_start(board, function () {
-		winston.info('Curfew ' + board + ' at ' +
-				new Date().toUTCString());
-		shutdown(board, function (err) {
-			if (err)
-				winston.error(err);
-		});
+	at_next_curfew_start(board, async () => {
+		winston.info(`Curfew ${board} at ${new Date().toUTCString()}`);
+		try {
+			await shutdown(board);
+		}
+		catch (err) {
+			winston.error(err);
+		}
 		setTimeout(enforce.bind(null, board), 30 * 1000);
 	});
 }

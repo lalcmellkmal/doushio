@@ -1604,76 +1604,6 @@ async function get_all_replies_and_privs(r, op) {
 	return [nums, privs];
 }
 
-
-/* AUTHORITY */
-
-function Filter(tag) {
-	events.EventEmitter.call(this);
-	this.tag = tag;
-};
-
-util.inherits(Filter, events.EventEmitter);
-exports.Filter = Filter;
-const F = Filter.prototype;
-
-F.connect = function () {
-	if (!this.r) {
-		this.r = global.redis;
-	}
-	return this.r;
-};
-
-F.get_all = function (limit) {
-	const r = this.connect();
-	const go = (err, threads) => {
-		if (err)
-			return this.failure(err);
-		async.forEach(threads, do_thread, err => this.check_done(err));
-	}
-	const do_thread = (op, cb) => {
-		const key = 'thread:' + op;
-		r.llen(key + ':posts', (err, len) => {
-			if (err)
-				cb(err);
-			len = parse_number(len);
-			if (len > limit)
-				return cb(null);
-			const thumbKeys = ['thumb', 'realthumb', 'src'];
-			r.hmget(key, thumbKeys, (err, rs) => {
-				if (err)
-					cb(err);
-				const thumb = rs[0] || rs[1] || rs[2];
-				this.emit('thread', {num: op, thumb: thumb});
-				cb(null);
-			});
-		});
-	}
-	r.zrange('tag:' + tag_key(this.tag) + ':threads', 0, -1, go);
-};
-
-F.check_done = function (err) {
-	if (err)
-		this.failure(err);
-	else
-		this.success();
-};
-
-F.success = function () {
-	this.emit('end');
-	this.cleanup();
-};
-
-F.failure = function (err) {
-	this.emit('error', err);
-	this.cleanup();
-};
-
-F.cleanup = function () {
-	this.removeAllListeners('error');
-	this.removeAllListeners('thread');
-	this.removeAllListeners('end');
-};
-
 /* AMUSEMENT */
 
 Y.get_fun = function (op, callback) {
@@ -1724,13 +1654,16 @@ Y.set_banner = function (op, message, cb) {
 	});
 };
 
-Y.teardown = function (board, cb) {
-	const m = this.connect().multi();
-	const filter = new Filter(board);
-	filter.get_all(NaN); // no length limit
-	filter.on('thread', thread => this._log(m, thread.num, common.TEARDOWN, []));
-	filter.on('error', cb);
-	filter.on('end', () => m.exec(cb));
+Y.teardown = async function (board) {
+	const r = this.connect();
+	// get all the threads of this curfewed board
+	const threads = await r.promise.zrange(`tag:${tag_key(board)}:threads`, 0, -1);
+	const m = r.multi();
+	for (let thread of threads) {
+		const op = parse_number(thread);
+		this._log(m, op, common.TEARDOWN, []);
+	}
+	await m.promise.exec();
 };
 
 Y.get_current_body = function (num, cb) {

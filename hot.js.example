@@ -7,6 +7,7 @@ this.hot = {
 		archive: "/archive/",
 		graveyard: "/graveyard/",
 		staff: "/staff/",
+		tea: "/tea/",
 	},
 	/* Default theme to use on each board */
 	BOARD_CSS: {
@@ -16,6 +17,7 @@ this.hot = {
 		archive: 'archive',
 		graveyard: 'mawaru',
 		staff: 'moe',
+		tea: 'tea',
 	},
 
 	/* Bump this version whenever you change base.css */
