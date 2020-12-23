@@ -164,7 +164,7 @@ function window_focused() {
 			connSM.feed('close');
 			return;
 		}
-		else if (navigator.onLine === false) {
+		else if (!config.DEBUG && navigator.onLine === false) {
 			connSM.feed('close');
 			return;
 		}
