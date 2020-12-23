@@ -939,16 +939,12 @@ function debug_command(client, frag) {
 		client.socket.close();
 }
 
-dispatcher[common.FINISH_POST] = function (msg, client) {
+dispatcher[common.FINISH_POST] = async function (msg, client) {
 	if (!check([], msg))
 		return false;
 	if (!client.post)
 		return true; /* whatever */
-	client.finish_post(function (err) {
-		if (err)
-			client.kotowaru(Muggle("Couldn't finish post.", err));
-	});
-	return true;
+	await client.finish_post();
 }
 
 dispatcher[common.DELETE_POSTS] = caps.mod_handler(async (nums, client) => {
@@ -974,24 +970,17 @@ dispatcher[common.DELETE_IMAGES] = caps.mod_handler(async (nums, client) => {
 	await client.db.remove_images(nums);
 });
 
-dispatcher[common.INSERT_IMAGE] = function (msg, client) {
+dispatcher[common.INSERT_IMAGE] = async function (msg, client) {
 	if (!check(['string'], msg))
 		return false;
-	const [alloc] = msg;
+	const [alloc_token] = msg;
 	const { post } = client;
 	if (!post || post.image)
 		return false;
-	imager.obtain_image_alloc(alloc).catch(err => {
-		client.kotowaru(Muggle("Image lost.", err));
-	}).then(alloc => {
-		if (!post || post.image)
-			return;
-		client.db.add_image(post, alloc, client.ident.ip, err => {
-			if (err)
-				client.kotowaru(Muggle("Image insertion problem.", err));
-		});
-	});
-	return true;
+	const alloc = await imager.obtain_image_alloc(alloc_token);
+	if (post.image)
+		return;
+	await client.db.add_image(post, alloc, client.ident.ip);
 };
 
 dispatcher[common.SPOILER_IMAGES] = caps.mod_handler(async (nums, client) => {

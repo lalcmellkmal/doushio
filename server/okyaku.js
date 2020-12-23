@@ -90,7 +90,7 @@ OK.on_message = async function (data) {
 
 const ip_expiries = new Map;
 
-OK.on_close = function () {
+OK.on_close = async function () {
 	const { ip } = this;
 	const clientList = STATE.clientsByIP[ip];
 	if (clientList) {
@@ -120,14 +120,16 @@ OK.on_close = function () {
 	const { db } = this;
 	if (db) {
 		db.kikanai();
-		if (this.post)
-			this.finish_post((err) => {
-				if (err)
-					winston.warn(`finishing post: ${err}`);
-				db.disconnect();
-			});
-		else
-			db.disconnect();
+		if (this.post) {
+			try {
+				await this.finish_post();
+			}
+			catch (err) {
+				winston.warn(`finishing post: ${err}`);
+				// fall through
+			}
+		}
+		db.disconnect();
 	}
 
 	this.emit('close');
@@ -147,19 +149,10 @@ OK.kotowaru = function (error) {
 	this.synced = false;
 };
 
-OK.finish_post = function (callback) {
+OK.finish_post = async function (callback) {
 	/* TODO: Should we check this.uploading? */
-	this.db.finish_post(this.post, (err) => {
-		if (err)
-			callback(err);
-		else {
-			if (this.post) {
-				this.last_num = this.post.num;
-				this.post = null;
-			}
-			callback(null);
-		}
-	});
+	await this.db.finish_post(this.post);
+	this.post = null;
 };
 
 exports.scan_client_caps = function () {

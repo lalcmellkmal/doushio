@@ -1017,29 +1017,26 @@ Y.check_new_thread_throttle = async function (ip) {
 		throw Muggle('Too soon. Try again later.');
 };
 
-Y.add_image = function (post, alloc, ip, callback) {
+Y.add_image = async function (post, alloc, ip) {
 	const r = this.connect();
-	let num = post.num, op = post.op;
+	let { num, op } = post;
 	if (!op)
-		return callback(Muggle("Can't add another image to an OP."));
-	let image = alloc.image;
+		throw Muggle("Can't add another image to an OP.");
+	let { image } = alloc;
 	if (!image.pinky)
-		return callback(Muggle("Image is wrong size."));
+		throw Muggle("Image is wrong size.");
 	delete image.pinky;
 
 	const key = 'post:' + num;
-	r.exists(key, (err, exists) => {
-		if (err)
-			return callback(err);
-		if (!exists)
-			return callback(Muggle("Post does not exist."));
+	const exists = await r.promise.exists(key);
+	if (!exists)
+		throw Muggle("Post does not exist.");
 
-		imager.commit_image_alloc(alloc).then(add_it, callback);
-	});
+	await imager.commit_image_alloc(alloc);
 
-	const add_it = () => {
+	{
 		const m = r.multi();
-		imager.note_hash(image.hash, post.num);
+		imager.note_hash(image.hash, num);
 		// HACK: hmset doesn't like our array, but we need it
 		let orig_dims = image.dims;
 		image.dims = orig_dims.toString();
@@ -1053,8 +1050,8 @@ Y.add_image = function (post, alloc, ip, callback) {
 
 		const now = Date.now();
 		update_throughput(m, ip, now, post_volume({image: true}));
-		m.exec(callback);
-	};
+		await m.promise.exec();
+	}
 };
 
 Y.append_post = async function (post, tail, old_state, extra) {
@@ -1107,13 +1104,13 @@ function finish_off(m, key) {
 	m.evalsha(LUA.finish.sha, 3, key, body_key, 'liveposts');
 }
 
-Y.finish_post = function (post, callback) {
+Y.finish_post = async function (post) {
 	const m = this.connect().multi();
 	const key = (post.op ? 'post:' : 'thread:') + post.num;
 	/* Don't need to check .exists() thanks to client state */
 	finish_off(m, key);
 	this._log(m, post.op || post.num, common.FINISH_POST, [post.num]);
-	m.exec(callback);
+	await m.promise.exec();
 };
 
 Y.finish_quietly = function (key, callback) {
