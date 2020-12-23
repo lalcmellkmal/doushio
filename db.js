@@ -1119,31 +1119,22 @@ Y.finish_quietly = function (key, callback) {
 	m.exec(callback);
 };
 
-Y.finish_all = function (callback) {
+Y.finish_all = async function () {
 	const r = this.connect();
-	r.smembers('liveposts', (err, keys) => {
-		if (err)
-			return callback(err);
-		async.forEach(keys, (key, cb) => {
-			const isPost = /^post:(\d+)$/.test(key);
-			const fini = (err, op) => {
-				if (err)
-					return cb(err);
-				const m = r.multi();
-				finish_off(m, key);
-				let n = parse_number(key.match(/:(\d+)$/)[1]);
-				op = isPost ? parse_number(op) : n;
-				this._log(m, op, common.FINISH_POST, [n]);
-				m.srem('liveposts', key);
-				m.exec(cb);
-			};
-			if (isPost)
-				r.hget(key, 'op', fini);
-			else
-				fini();
-		}, callback);
-
-	});
+	const keys = await r.promise.smembers('liveposts');
+	for (let key of keys) {
+		const isPost = /^post:(\d+)$/.test(key);
+		let op;
+		if (isPost)
+			op = await r.promise.hget(key, 'op');
+		const m = r.multi();
+		finish_off(m, key);
+		let n = parse_number(key.match(/:(\d+)$/)[1]);
+		op = isPost ? parse_number(op) : n;
+		this._log(m, op, common.FINISH_POST, [n]);
+		m.srem('liveposts', key);
+		await m.promise.exec();
+	}
 };
 
 Y._log = function (m, op, kind, msg, opts) {

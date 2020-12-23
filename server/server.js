@@ -4,7 +4,6 @@ opts.load_defaults();
 
 const _ = require('../lib/underscore'),
     amusement = require('./amusement'),
-    async = require('async'),
     auth = require('./auth'),
     caps = require('./caps'),
     check = require('./msgcheck').check,
@@ -1160,25 +1159,18 @@ async function main() {
 	await STATE.reload_hot_resources();
 	await db.track_OPs();
 
-	const yaku = new db.Yakusoku(null, db.UPKEEP_IDENT);
-	let onegai;
-	const writes = [];
 	if (!config.READ_ONLY) {
-		writes.push(yaku.finish_all.bind(yaku));
+		const yaku = new db.Yakusoku(null, db.UPKEEP_IDENT);
+		await yaku.finish_all();
+		yaku.disconnect();
+
 		if (!imager.is_standalone()) {
-			onegai = new imager.Onegai;
-			writes.push(onegai.delete_temporaries.bind(
-					onegai));
+			const onegai = new imager.Onegai;
+			await onegai.delete_temporaries();
+			onegai.disconnect();
 		}
 	}
-	async.series(writes, function (err) {
-		if (err)
-			throw err;
-		yaku.disconnect();
-		if (onegai)
-			onegai.disconnect();
-		process.nextTick(start_server);
-	});
+	process.nextTick(start_server);
 }
 
 if (require.main === module)
