@@ -44,51 +44,44 @@ dispatcher[common.PING] = function (msg, client) {
 	return true;
 };
 
-dispatcher[common.SYNCHRONIZE] = function (msg, client) {
-	function checked(err, ident) {
-		if (!err)
-			_.extend(client.ident, ident);
-		if (!synchronize(msg, client))
-			client.kotowaru(Muggle("Bad protocol."));
-	}
+dispatcher[common.SYNCHRONIZE] = async function (msg, client) {
 	const chunks = web.parse_cookie(msg.pop());
 	const cookie = auth.extract_login_cookie(chunks);
 	if (cookie) {
-		auth.check_cookie(cookie, checked);
-		return true;
+		try {
+			const ident = await auth.check_cookie_async(cookie);
+			_.extend(client.ident, ident);
+		}
+		catch (err) {
+			// cookie was invalid. that's OK. fall through.
+			if (config.DEBUG)
+				winston.verbose(`expired cookie: ${cookie}`);
+		}
 	}
-	else
-		return synchronize(msg, client);
+	await synchronize(msg, client);
 };
 
-function synchronize(msg, client) {
+async function synchronize(msg, client) {
 	if (!check(['id', 'string', 'id=>nat', 'boolean'], msg))
-		return false;
+		throw Muggle("Invalid synchronize message");
 	let [id, board, syncs, live] = msg;
 	if (id in STATE.clients) {
 		winston.error(`Duplicate client id ${id}`);
-		return false;
+		throw Muggle(`Duplicate client id`);
 	}
 	client.id = id;
 	STATE.clients[id] = client;
+	const { ident } = client;
 
-	if (!caps.can_access_board(client.ident, board))
-		return false;
-	let dead_threads = [], count = 0, op;
-	for (let k in syncs) {
-		k = parseInt(k, 10);
-		if (db.OPs[k] != k || !db.OP_has_tag(board, k)) {
-			delete syncs[k];
-			dead_threads.push(k);
-		}
-		op = k;
-		if (++count > config.THREADS_PER_PAGE) {
-			/* Sync logic isn't great yet; allow this for now */
-			// return false;
-		}
-	}
-	client.watching = syncs;
+	if (!caps.can_access_board(ident, board))
+		throw Muggle('Access denied.');
+
+	let oneThreadOnly = undefined;
+	client.watching = new Map();
 	if (live) {
+		// watch (all?) threads + listen for new threads
+		// TODO: watch only the threads on the front page
+
 		/* XXX: This will break if a thread disappears during sync
 		 *      (won't be reported)
 		 * Or if any of the threads they see on the first page
@@ -96,53 +89,70 @@ function synchronize(msg, client) {
 		 * Really we should get them synced first and *then* switch
 		 * to the live pub.
 		 */
-		client.watching = {live: true};
-		count = 1;
+		client.watching.set('live', true);
 	}
+	else { // watch individual threads
+		let count = 0;
+		for (let k in syncs) {
+			k = parseInt(k, 10);
+			// threads might have been deleted in the interim. skip them
+			if (db.OPs[k] != k || !db.OP_has_tag(board, k)) {
+				delete syncs[k];
+				continue;
+			}
+			// don't let them spam subscriptions
+			if (++count > (config.THREADS_PER_PAGE * 2)) {
+				return false;
+			}
+			if (oneThreadOnly === undefined)
+				oneThreadOnly = k;
+			else if (oneThreadOnly)
+				oneThreadOnly = false;
+			// okay, we'll request to watch this thread
+			client.watching.set(k, syncs[k]);
+		}
+	}
+
+	// it feels too stateful to save the board here
+	// TODO delet
 	client.board = board;
 
 	if (client.db)
 		client.db.disconnect();
-	client.db = new db.Yakusoku(board, client.ident);
+	client.db = new db.Yakusoku(board, ident);
 	/* Race between subscribe and backlog fetch; client must de-dup */
-	client.db.kiku(client.watching, client.on_update.bind(client),
-			client.on_thread_sink.bind(client), listening);
-	function listening(errs) {
-		if (errs && errs.length >= count)
-			return client.kotowaru(Muggle("Couldn't sync to board."));
-		else if (errs) {
-			dead_threads.push.apply(dead_threads, errs);
-			errs.forEach(thread => {
-				delete client.watching[thread];
-			});
-		}
-		client.db.fetch_backlogs(client.watching, got_backlogs);
+	try {
+		await client.db.kiku(client.watching, client.on_update.bind(client), client.on_thread_sink.bind(client));
 	}
-	function got_backlogs(errs, logs) {
-		if (errs) {
-			dead_threads.push.apply(dead_threads, errs);
-			errs.forEach(thread => {
-				delete client.watching[thread];
-			});
+	catch (err) {
+		throw Muggle("Couldn't sync to board.", err);
+	}
+
+	// now that we're subscribed, use the backlogs to catch up
+	let logs;
+	try {
+		logs = await client.db.fetch_backlogs(client.watching);
+	}
+	catch (err) {
+		try {
+			client.db.kikanai();
 		}
-
-		if (client.ident.readOnly) {
-			logs.push(`0,${common.MODEL_SET},["hot"],{"readOnly":true}`);
-		}
-
-		let sync = '0,' + common.SYNCHRONIZE;
-		if (dead_threads.length)
-			sync += ',' + JSON.stringify(dead_threads);
-		logs.push(sync);
-		client.socket.write(`[[${logs.join('],[')}]]`);
-		client.synced = true;
-
-		const isSingleThread = !live && count == 1;
-		if (isSingleThread) {
-			amusement.notify_client_fun_banner(client, op);
+		finally {
+			throw Muggle("Couldn't sync to board.", err);
 		}
 	}
-	return true;
+
+	if (ident.readOnly) {
+		logs.push(`0,${common.MODEL_SET},["hot"],{"readOnly":true}`);
+	}
+
+	logs.push(`0,${common.SYNCHRONIZE}`);
+	client.socket.write(`[[${logs.join('],[')}]]`);
+	client.synced = true;
+
+	if (oneThreadOnly) {
+		amusement.notify_client_fun_banner(client, oneThreadOnly);
+	}
 }
 
 function setup_imager_relay() {
@@ -743,7 +753,7 @@ const insertSpec = [{
 	flavor: 'opt string',
 }];
 
-dispatcher[common.INSERT_POST] = function (msg, client) {
+dispatcher[common.INSERT_POST] = async function (msg, client) {
 	if (!check(insertSpec, msg))
 		return false;
 	msg = msg[0];
@@ -759,9 +769,7 @@ dispatcher[common.INSERT_POST] = function (msg, client) {
 	if (config.DEBUG)
 		debug_command(client, frag);
 
-	return allocate_post(msg, client).catch(err => {
-		client.kotowaru(err);
-	});
+	await allocate_post(msg, client);
 }
 
 async function allocate_post(msg, client) {
@@ -879,7 +887,7 @@ async function allocate_post(msg, client) {
 	}
 }
 
-function update_post(frag, client) {
+async function update_post(frag, client) {
 	if (typeof frag != 'string')
 		return false;
 	if (config.DEBUG)
@@ -918,11 +926,7 @@ function update_post(frag, client) {
 		extra.new_links = new_links;
 	}
 
-	client.db.append_post(post, frag, old_state, extra, err => {
-		if (err)
-			client.kotowaru(Muggle("Couldn't add text.", err));
-	});
-	return true;
+	await client.db.append_post(post, frag, old_state, extra);
 }
 dispatcher[common.UPDATE_POST] = update_post;
 

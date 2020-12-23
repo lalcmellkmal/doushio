@@ -20,8 +20,8 @@ const SUBS = exports.SUBS = cache.threadSubs;
 
 const LUA = {};
 function register_lua(name) {
-	const src = fs.readFileSync('lua/' + name + '.lua', 'UTF-8');
-	LUA[name] = {src: src};
+	const src = fs.readFileSync(`lua/${name}.lua`, 'UTF-8');
+	LUA[name] = {src};
 }
 
 function redis_client() {
@@ -83,18 +83,21 @@ function Subscription(targetInfo) {
 	this.channel = targetInfo.channel;
 	SUBS[this.fullKey] = this;
 
-	this.pending_subscriptions = [];
-	this.subscription_callbacks = [];
+	// once all `pending_subscriptions` are subscribed, `ready` will resolve
+	this.pending_subscriptions = new Set();
+	this.ready = new Promise((resolve, reject) => {
+		this._ready_callbacks = {resolve, reject};
+	});
 
 	this.k = redis_client();
-	this.k.on('error', this.on_sub_error.bind(this));
-	this.k.on('subscribe', this.on_one_sub.bind(this));
+	this.k.on('error', this._on_sub_error.bind(this));
+	this.k.on('subscribe', this._on_one_sub.bind(this));
 	this.k.subscribe(this.target);
 	this.subscriptions = [this.target];
-	this.pending_subscriptions.push(this.target);
+	this.pending_subscriptions.add(this.target);
 	if (this.target != this.fullKey) {
 		this.k.subscribe(this.fullKey);
-		this.pending_subscriptions.push(this.fullKey);
+		this.pending_subscriptions.add(this.fullKey);
 	}
 };
 
@@ -119,31 +122,24 @@ Subscription.get = function (target, ident) {
 	return sub;
 };
 
-S.when_ready = function (cb) {
-	if (this.subscription_callbacks)
-		this.subscription_callbacks.push(cb);
-	else
-		cb(null);
-};
-
-S.on_one_sub = function (name) {
-	let i = this.pending_subscriptions.indexOf(name);
-	if (i < 0)
+S._on_one_sub = function (name) {
+	if (!this.pending_subscriptions.delete(name))
 		throw new Error(`Obtained unasked-for subscription ${name}?!`);
-	this.pending_subscriptions.splice(i, 1);
-	if (this.pending_subscriptions.length == 0)
-		this.on_all_subs();
-};
-
-S.on_all_subs = function () {
-	let k = this.k;
+	if (this.pending_subscriptions.size > 0)
+		return;
+	// hooray, we're now subscribed to everything we asked for
+	delete this.pending_subscriptions;
+	let { k } = this;
 	k.removeAllListeners('subscribe');
 	k.on('message', this.on_message.bind(this));
 	k.removeAllListeners('error');
 	k.on('error', this.sink_sub.bind(this));
-	this.subscription_callbacks.forEach(cb => cb(null));
-	delete this.pending_subscriptions;
-	delete this.subscription_callbacks;
+
+	if (this._ready_callbacks) {
+		const { resolve } = this._ready_callbacks;
+		delete this._ready_callbacks;
+		resolve();
+	}
 };
 
 function length_prefixed(str) {
@@ -187,11 +183,14 @@ S.on_message = function (chan, msg) {
 	this.emit('update', op, kind, `[[${msg}]]`);
 };
 
-S.on_sub_error = function (err) {
-	winston.error("Subscription error:", (err.stack || err));
+S._on_sub_error = function (err) {
+	winston.error(`Subscription error: ${err.stack || err}`);
 	this.commit_sudoku();
-	this.subscription_callbacks.forEach(cb => cb(err));
-	this.subscription_callbacks = null;
+	if (this._ready_callbacks) {
+		const { reject } = this._ready_callbacks;
+		delete this._ready_callbacks;
+		reject(err);
+	}
 };
 
 S.sink_sub = function (err) {
@@ -202,7 +201,7 @@ S.sink_sub = function (err) {
 };
 
 S.commit_sudoku = function () {
-	const k = this.k;
+	const { k } = this;
 	k.removeAllListeners('error');
 	k.removeAllListeners('message');
 	k.removeAllListeners('subscribe');
@@ -443,21 +442,26 @@ Y.target_key = function (id) {
 	return (id == 'live') ? 'tag:' + this.tag : 'thread:' + id;
 };
 
-Y.kiku = function (targets, on_update, on_sink, callback) {
+Y.kiku = async function (targets, on_update, on_sink) {
 	this.on_update = on_update;
 	this.on_sink = on_sink;
-	forEachInObject(targets, (id, cb) => {
+	const { ident } = this;
+	const promises = [];
+	for (let [id, _sync] of targets) {
 		const target = this.target_key(id);
-		const sub = Subscription.get(target, this.ident);
+		const sub = Subscription.get(target, ident);
 		sub.on('update', on_update);
 		sub.on('error', on_sink);
 		this.subs.push(sub.fullKey);
-		sub.when_ready(cb);
-	}, callback);
+		promises.push(sub.ready);
+	}
+	await Promise.all(promises);
 };
 
 Y.kikanai = function () {
-	this.subs.forEach(key => {
+	if (!this.on_update)
+		return;
+	for (let key of this.subs) {
 		const sub = SUBS[key];
 		if (sub) {
 			sub.removeListener('update', this.on_update);
@@ -465,8 +469,10 @@ Y.kikanai = function () {
 			if (sub.listeners('update').length == 0)
 				sub.has_no_listeners();
 		}
-	});
+	}
 	this.subs = [];
+	this.on_update = null;
+	this.on_sink = null;
 };
 
 function post_volume(view, body) {
@@ -1051,7 +1057,7 @@ Y.add_image = function (post, alloc, ip, callback) {
 	};
 };
 
-Y.append_post = function (post, tail, old_state, extra, cb) {
+Y.append_post = async function (post, tail, old_state, extra) {
 	const m = this.connect().multi();
 	const key = (post.op ? 'post:' : 'thread:') + post.num;
 	/* Don't need to check .exists() thanks to client state */
@@ -1090,7 +1096,7 @@ Y.append_post = function (post, tail, old_state, extra, cb) {
 			msg.push(a);
 
 		this._log(m, post.op || post.num, common.UPDATE_POST, msg);
-		m.exec(cb);
+		await m.promise.exec();
 	}
 };
 
@@ -1182,47 +1188,40 @@ Y._log = function (m, op, kind, msg, opts) {
 	}
 };
 
-Y.fetch_backlogs = function (watching, callback) {
+Y.fetch_backlogs = async function (watching) {
+	if (watching.size == 1 && watching.get('live')) {
+		// TODO provide backlogs for `live` too, or just get rid of it?
+		return [];
+	}
 	const r = this.connect();
 	const combined = [];
 	const inject_ips = caps.can_moderate(this.ident);
-	forEachInObject(watching, (thread, cb) => {
-		if (thread == 'live')
-			return cb(null);
-		const key = 'thread:' + thread;
-		const sync = watching[thread];
+	// TODO parallelize
+	for (let [thread, sync] of watching) {
+		const key = `thread:${thread}`;
 		const m = r.multi();
 		m.lrange(key + ':history', sync, -1);
 		if (inject_ips) {
-			// would be nice to fetch only the relevant ips...?
+			// if they're a mod, get the num->ip mapping to augment the logs
 			m.hgetall(key + ':ips');
 		}
-		m.exec((err, rs) => {
-			if (err)
-				return cb(err);
+		const [history, ips] = await m.promise.exec();
+		const prefix = thread + ',';
 
-			const prefix = thread + ',';
-			const ips = inject_ips && rs[1];
-
-			// construct full messages from history entries
-			rs[0].forEach(entry => {
-
-				// attempt to inject ip to INSERT_POST log
-				const m = ips && entry.match(/^2,(\d+),{(.+)$/);
+		// construct full messages from history entries
+		for (let entry of history) {
+			if (inject_ips) {
+				// HACK: attempt to inject ip into INSERT_POST log
+				const m = entry.match(/^2,(\d+),{(.+)$/);
 				const ip = m && ips[m[1]];
 				if (ip) {
-					const inject = '"ip":' + JSON.stringify(ip) + ',';
-					entry = '2,' + m[1] + ',{' + inject + m[2];
+					entry = `2,${m[1]},{"ip":${JSON.stringify(ip)},${m[2]}`;
 				}
-
-				combined.push(prefix + entry);
-			});
-
-			cb(null);
-		});
-	}, errs => {
-		callback(errs, combined);
-	});
+			}
+			combined.push(prefix + entry);
+		}
+	}
+	return combined;
 };
 
 Y.get_post_op = function (num, callback) {

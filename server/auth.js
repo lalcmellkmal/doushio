@@ -1,5 +1,6 @@
 const _ = require('../lib/underscore'),
-    common = require('../common'),
+    { escape_html } = require('../common'),
+    { Muggle } = require('../etc'),
     config = require('../config'),
     crypto = require('crypto'),
     formidable = require('formidable'),
@@ -41,10 +42,10 @@ exports.login = function (req, resp) {
 			}
 			if (req.query.error) {
 				// escaping out of paranoia (though respond_error emits JSON)
-				let err = common.escape_html(req.query.error);
+				let err = escape_html(req.query.error);
 				winston.error(`OAuth error: ${err}`);
 				if (req.query.error_description) {
-					err = common.escape_html(req.query.error_description);
+					err = escape_html(req.query.error_description);
 					winston.error(`Desc: ${err}`);
 				}
 				fail(`OAuth login failure: ${err}`);
@@ -184,10 +185,14 @@ exports.check_cookie = function (cookie, callback) {
 		if (err)
 			return callback(err);
 		else if (_.isEmpty(session))
-			return callback('Not logged in.');
+			return callback(Muggle('Not logged in.'));
 		callback(null, session);
 	});
 };
+
+exports.check_cookie_async = (cookie) => new Promise((resolve, reject) => {
+	exports.check_cookie(cookie, (err, session) => err ? reject(err) : resolve(session));
+});
 
 exports.logout = function (req, resp) {
 	if (req.method != 'POST') {
