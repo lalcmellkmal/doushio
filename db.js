@@ -1,5 +1,4 @@
 const _ = require('./lib/underscore'),
-    async = require('async'),
     cache = require('./server/state').dbCache,
     caps = require('./server/caps'),
     common = require('./common'),
@@ -803,24 +802,27 @@ Y.remove_thread = async function (op) {
 	}
 };
 
-Y.archive_thread = function (op, callback) {
+Y.archive_thread = async function (op) {
 	const r = this.connect();
-	const key = 'thread:' + op, archiveKey = 'tag:' + tag_key('archive');
-	async.waterfall([
-	next => {
+	const key = 'thread:' + op;
+
+	// sanity checks
+	const [exists, is_immortal, in_graveyard] = await (() => {
 		const m = r.multi();
 		m.exists(key);
 		m.hget(key, 'immortal');
-		m.zscore('tag:' + tag_key('graveyard') + ':threads', op);
-		m.exec(next);
-	},
-	(rs, next) => {
-		if (!rs[0])
-			return callback(Muggle(key + ' does not exist.'));
-		if (parse_number(rs[1]))
-			return callback(Muggle(key + ' is immortal.'));
-		if (rs[2])
-			return callback(Muggle(key + ' is already deleted.'));
+		m.zscore(`tag:${tag_key('graveyard')}:threads`, op);
+		return m.promise.exec();
+	})();
+	if (!exists)
+		throw Muggle(`>>${op} does not exist.`);
+	if (parse_number(is_immortal))
+		throw Muggle(`>>${op} will not die even if it is killed.`);
+	if (in_graveyard)
+		throw Muggle(`>>${op} is already dead.`);
+
+	// okay, get the bulk of the thread data
+	let [view, links, replyCount, privs, dels] = await (() => {
 		const m = r.multi();
 		// order counts
 		m.hgetall(key);
@@ -828,26 +830,27 @@ Y.archive_thread = function (op, callback) {
 		m.llen(key + ':posts');
 		m.smembers(key + ':privs');
 		m.lrange(key + ':dels', 0, -1);
-		m.exec(next);
-	},
-	(rs, next) => {
-		let view = rs[0], links = rs[1], replyCount = rs[2],
-				privs = rs[3], dels = rs[4];
+		return m.promise.exec();
+	})();
+
+	// move it over and strip the history/metadata
+	{
 		let subject = subject_val(op, view.subject);
-		let tags = view.tags;
+		let { tags } = view;
 		const m = r.multi();
 		// move to archive tag only
 		m.hset(key, 'origTags', tags);
 		m.hset(key, 'tags', tag_key('archive'));
 		tags = parse_tags(tags);
-		tags.forEach(tag => {
+		for (let tag of tags) {
 			const tagKey = 'tag:' + tag_key(tag);
 			m.zrem(tagKey + ':threads', op);
 			if (subject)
 				m.zrem(tagKey + ':subjects', subject);
-		});
-		m.zadd(archiveKey + ':threads', op, op);
-		this._log(m, op, common.DELETE_THREAD, [], {tags: tags});
+		}
+
+		m.zadd(`tag:${tag_key('archive')}:threads`, op, op);
+		this._log(m, op, common.DELETE_THREAD, [], {tags});
 
 		// shallow thread insertion message in archive
 		if (!_.isEmpty(links))
@@ -867,23 +870,21 @@ Y.archive_thread = function (op, callback) {
 		m.del(key + ':ips');
 
 		// delete hidden posts
-		dels.forEach(num => {
-			m.del('post:' + num);
-			m.del('post:' + num + ':links');
-		});
+		for (let num of dels) {
+			m.del(`post:${num}`);
+			m.del(`post:${num}:links`);
+		}
 		m.del(key + ':dels');
 
 		if (privs.length) {
 			m.del(key + ':privs');
-			privs.forEach(priv => m.del(key + ':privs:' + priv));
+			for (let priv of privs)
+				m.del(`${key}:privs:${priv}`);
 		}
 
-		m.exec(next);
-	},
-	(results, done) => {
-		set_OP_tag(config.BOARDS.indexOf('archive'), op);
-		done();
-	}], callback);
+		await m.promise.exec();
+	}
+	set_OP_tag(config.BOARDS.indexOf('archive'), op);
 };
 
 /* BOILERPLATE CITY */
