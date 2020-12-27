@@ -1,5 +1,5 @@
-var config = require('./config');
-var imagerConfig = require('./imager/config');
+const config = require('./config');
+const imagerConfig = require('./imager/config');
 const DEFINES = exports;
 DEFINES.INVALID = 0;
 
@@ -64,14 +64,14 @@ function FSM(start) {
 exports.FSM = FSM;
 
 FSM.prototype.clone = function () {
-	var second = new FSM(this.state);
+	const second = new FSM(this.state);
 	second.spec = this.spec;
 	return second;
 };
 
 // Handlers on arriving to a new state
 FSM.prototype.on = function (key, f) {
-	var ons = this.spec.ons[key];
+	const ons = this.spec.ons[key];
 	if (ons)
 		ons.push(f);
 	else
@@ -81,7 +81,7 @@ FSM.prototype.on = function (key, f) {
 
 // Sanity checks before attempting a transition
 FSM.prototype.preflight = function (key, f) {
-	var pres = this.spec.preflights[key];
+	const pres = this.spec.preflights[key];
 	if (pres)
 		pres.push(f);
 	else
@@ -90,26 +90,26 @@ FSM.prototype.preflight = function (key, f) {
 
 // Specify transitions and an optional handler function
 FSM.prototype.act = function (trans_spec, on_func) {
-	var halves = trans_spec.split('->');
+	const halves = trans_spec.split('->');
 	if (halves.length != 2)
 		throw new Error("Bad FSM spec: " + trans_spec);
-	var parts = halves[0].split(',');
-	var dest = halves[1].match(/^\s*(\w+)\s*$/)[1];
-	var tok;
-	for (var i = parts.length-1; i >= 0; i--) {
-		var part = parts[i];
-		var m = part.match(/^\s*(\*|\w+)\s*(?:\+\s*(\w+)\s*)?$/);
+	const parts = halves[0].split(',');
+	const dest = halves[1].match(/^\s*(\w+)\s*$/)[1];
+	let tok;
+	for (let i = parts.length-1; i >= 0; i--) {
+		const part = parts[i];
+		const m = part.match(/^\s*(\*|\w+)\s*(?:\+\s*(\w+)\s*)?$/);
 		if (!m)
-			throw new Error("Bad FSM spec portion: " + part);
+			throw new Error(`Bad FSM spec portion: ${part}`);
 		if (m[2])
 			tok = m[2];
 		if (!tok)
-			throw new Error("Tokenless FSM action: " + part);
-		var src = m[1];
+			throw new Error(`Tokenless FSM action: ${part}`);
+		const src = m[1];
 		if (src == '*')
 			this.spec.wilds[tok] = dest;
 		else {
-			var acts = this.spec.acts[src];
+			let acts = this.spec.acts[src];
 			if (!acts)
 				this.spec.acts[src] = acts = {};
 			acts[tok] = dest;
@@ -121,40 +121,37 @@ FSM.prototype.act = function (trans_spec, on_func) {
 };
 
 FSM.prototype.feed = function (ev, param) {
-	var spec = this.spec;
-	var from = this.state, acts = spec.acts[from];
-	var to = (acts && acts[ev]) || spec.wilds[ev];
-	if (to && from != to) {
-		var ps = spec.preflights[to];
-		for (var i = 0; ps && i < ps.length; i++)
-			if (!ps[i].call(this, param))
-				return false;
+	const { spec, state } = this;
+	const acts = spec.acts[state];
+	const to = (acts && acts[ev]) || spec.wilds[ev];
+	if (to && state != to) {
+		// preflight checks first
+		const preflights = spec.preflights[to];
+		if (preflights)
+			for (let pre of preflights)
+				if (!pre.call(this, param))
+					return false;
+		// ok, transition to the new state
 		this.state = to;
-		var fs = spec.ons[to];
-		for (var i = 0; fs && i < fs.length; i++)
-			fs[i].call(this, param);
+		for (let handler of spec.ons[to])
+			handler.call(this, param);
 	}
 	return true;
 };
 
 FSM.prototype.feeder = function (ev) {
-	var self = this;
-	return function (param) {
-		self.feed(ev, param);
-	};
+	return (param) => this.feed(ev, param);
 };
 
-var entities = {'&' : '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'};
+const entities = {'&' : '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'};
 function escape_html(html) {
-	return html.replace(/[&<>"]/g, function (c) {
-		return entities[c];
-	});
+	return html.replace(/[&<>"]/g, c => entities[c]);
 }
 exports.escape_html = escape_html;
 
 function escape_fragment(frag) {
-	var t = typeof(frag);
-	if (t == 'object' && frag && typeof(frag.safe) == 'string')
+	const t = typeof frag;
+	if (t == 'object' && frag && typeof frag.safe == 'string')
 		return frag.safe;
 	else if (t == 'string')
 		return escape_html(frag);
@@ -166,9 +163,8 @@ function escape_fragment(frag) {
 exports.escape_fragment = escape_fragment;
 
 function flatten(frags) {
-	var out = [];
-	for (var i = 0; i < frags.length; i++) {
-		var frag = frags[i];
+	let out = [];
+	for (let frag of frags) {
 		if (Array.isArray(frag))
 			out = out.concat(flatten(frag));
 		else
@@ -184,45 +180,44 @@ function safe(frag) {
 exports.safe = safe;
 
 function is_noko(email) {
-	return email && email.indexOf('@') == -1 && /noko/i.test(email);
+	return email && !email.includes('@') && /noko/i.test(email);
 }
 exports.is_noko = is_noko;
 function is_sage(email) {
-	return config.SAGE_ENABLED && email &&
-			email.indexOf('@') == -1 && /sage/i.test(email);
+	return config.SAGE_ENABLED && email && !email.includes('@') && /sage/i.test(email);
 }
 exports.is_sage = is_sage;
 
-var OneeSama = function (t) {
+const OneeSama = function (t) {
 	this.tamashii = t;
 	this.hooks = {};
 };
 exports.OneeSama = OneeSama;
-var OS = OneeSama.prototype;
+const OS = OneeSama.prototype;
 
-var break_re = new RegExp("(\\S{" + DEFINES.WORD_LENGTH_LIMIT + "})");
+const break_re = new RegExp("(\\S{" + DEFINES.WORD_LENGTH_LIMIT + "})");
 /* internal refs, embeds */
-var ref_re = />>(\d+|>\/watch\?v=[\w-]{11}(?:#t=[\dhms]{1,9})?|>\/soundcloud\/[\w-]{1,40}\/[\w-]{1,80}|>\/@\w{1,15}\/\d{4,20}(?:\?s=\d+)?|>\/a\/\d{0,10})/;
+const ref_re = />>(\d+|>\/watch\?v=[\w-]{11}(?:#t=[\dhms]{1,9})?|>\/soundcloud\/[\w-]{1,40}\/[\w-]{1,80}|>\/@\w{1,15}\/\d{4,20}(?:\?s=\d+)?|>\/a\/\d{0,10})/;
 
 OS.hook = function (name, func) {
-	var hs = this.hooks[name];
+	const hs = this.hooks[name];
 	if (!hs)
-		this.hooks[name] = hs = [func];
-	else if (hs.indexOf(func) < 0)
+		this.hooks[name] = [func];
+	else if (!hs.includes(func))
 		hs.push(func);
 };
 
 OS.trigger = function (name, param) {
-	var hs = this.hooks[name];
+	const hs = this.hooks[name];
 	if (hs)
-		for (var i = 0; i < hs.length; i++)
+		for (let i = 0; i < hs.length; i++)
 			hs[i].call(this, param);
 };
 
 function override(obj, orig, upgrade) {
-	var origFunc = obj[orig];
+	const origFunc = obj[orig];
 	obj[orig] = function () {
-		var args = [].slice.apply(arguments);
+		const args = [].slice.apply(arguments);
 		args.unshift(origFunc);
 		return upgrade.apply(this, args);
 	};
@@ -230,8 +225,8 @@ function override(obj, orig, upgrade) {
 
 /// converts one >>ref to html
 OS.red_string = function (ref) {
-	var prefix = ref.slice(0, 3);
-	var dest, linkClass;
+	const prefix = ref.slice(0, 3);
+	let dest, linkClass;
 	if (prefix == '>/w') {
 		dest = 'https://www.youtube.com/' + ref.slice(2);
 		linkClass = 'embed watch';
@@ -241,13 +236,13 @@ OS.red_string = function (ref) {
 		linkClass = 'embed soundcloud';
 	}
 	else if (prefix == '>/@') {
-		var bits = ref.slice(3).split('/');
-		dest = 'https://twitter.com/' + bits[0] + '/status/' + bits[1];
+		const [handle, tweet] = ref.slice(3).split('/');
+		dest = `https://twitter.com/${handle}/status/${tweet}`;
 		linkClass = 'embed tweet';
 	}
 	else if (prefix == '>/a') {
-		var num = parseInt(ref.slice(4), 10);
-		dest = '../outbound/a/' + (num ? ''+num : '');
+		const num = parseInt(ref.slice(4), 10);
+		dest = `../outbound/a/${num ? ''+num : ''}`;
 	}
 	else {
 		this.tamashii(parseInt(ref, 10));
@@ -261,12 +256,12 @@ OS.break_heart = function (frag) {
 	if (frag.safe)
 		return this.callback(frag);
 	// break long words
-	var bits = frag.split(break_re);
-	for (var i = 0; i < bits.length; i++) {
+	const bits = frag.split(break_re);
+	for (let i = 0; i < bits.length; i++) {
 		// anchor >>refs
-		var morsels = bits[i].split(ref_re);
-		for (var j = 0; j < morsels.length; j++) {
-			var m = morsels[j];
+		const morsels = bits[i].split(ref_re);
+		for (let j = 0; j < morsels.length; j++) {
+			const m = morsels[j];
 			if (j % 2)
 				this.red_string(m);
 			else if (i % 2) {
@@ -281,7 +276,7 @@ OS.break_heart = function (frag) {
 
 /// 2nd tokenization stage; as we transition our state[0] flag, emits html tags as necessary
 OS.iku = function (token, to) {
-	var state = this.state;
+	const { state } = this;
 	if (state[0] & DEFINES.S_QUOTE && !(to & DEFINES.S_QUOTE))
 		this.callback(safe('</em>'));
 	if (state[0] & DEFINES.S_BIG && !(to & DEFINES.S_BIG)) {
@@ -305,7 +300,7 @@ OS.iku = function (token, to) {
 			this.callback(safe('</del>'));
 		}
 		else {
-			var del = {html: '<del>'};
+			const del = {html: '<del>'};
 			this.trigger('spoilerTag', del);
 			this.callback(safe(del.html));
 			state[1]++;
@@ -320,25 +315,25 @@ OS.iku = function (token, to) {
 
 /// 1st tokenization stage, breaking up [spoiler]s, >quotes, and line breaks
 OS.fragment = function (frag) {
-	var chunks = frag.split(/(\[\/?spoiler\])/i);
-	var state = this.state;
-	for (var i = 0; i < chunks.length; i++) {
-		var chunk = chunks[i];
+	const chunks = frag.split(/(\[\/?spoiler\])/i);
+	const { state } = this;
+	for (let i = 0; i < chunks.length; i++) {
+		const chunk = chunks[i];
 		if (i % 2) {
-			var to = 'SPOIL';
+			let to = 'SPOIL';
 			if (chunk[1] == '/' && state[1] < 1)
 				to = state[0] & DEFINES.S_QUOTE;
 			this.iku(chunk, to);
 			continue;
 		}
-		lines = chunk.split(/(\n)/);
-		for (var l = 0; l < lines.length; l++) {
-			var line = lines[l];
-			var is_bol = state[0] === DEFINES.S_BOL;
+		const lines = chunk.split(/(\n)/);
+		for (let l = 0; l < lines.length; l++) {
+			const line = lines[l];
+			const is_bol = state[0] === DEFINES.S_BOL;
 			if (l % 2)
 				this.iku(safe('<br>'), DEFINES.S_BOL);
 			else if (is_bol && !state[1] && /^[#＃]{2}[^#＃]/.test(line)) {
-				var to = DEFINES.S_BIG;
+				let to = DEFINES.S_BIG;
 				if (/[>＞]/.test(line[2]))
 					to |= DEFINES.S_QUOTE;
 				this.iku(line.slice(2), to);
@@ -370,19 +365,19 @@ OS.close_out = function () {
 
 /// converts one post body to HTML
 OS.karada = function (body) {
-	var output = [];
+	const output = [];
 	this.state = initial_state();
-	this.callback = function (frag) { output.push(frag); }
+	this.callback = (frag) => output.push(frag);
 	this.fragment(body);
 	this.close_out();
 	this.callback = null;
 	return output;
 }
 
-var dice_re = /(#flip|#8ball|#imfey|#\d{0,2}d\d{1,4}(?:[+-]\d{1,4})?)/i;
+const dice_re = /(#flip|#8ball|#imfey|#\d{0,2}d\d{1,4}(?:[+-]\d{1,4})?)/i;
 exports.dice_re = dice_re;
 
-var EIGHT_BALL = [
+const EIGHT_BALL = [
 	'Yes',
 	'No',
 	'Maybe',
@@ -404,7 +399,7 @@ var EIGHT_BALL = [
 	'Would you kindly?',
 ];
 
-var IMFEY = [
+const IMFEY = [
 	'wowme2',
 	'u do u',
 	"go get 'em champ",
@@ -423,13 +418,13 @@ function parse_dice(frag) {
 		return {n: 1, faces: IMFEY.length};
 	if (frag == '#8ball')
 		return {n: 1, faces: EIGHT_BALL.length};
-	var m = frag.match(/^#(\d*)d(\d+)([+-]\d+)?$/i);
+	const m = frag.match(/^#(\d*)d(\d+)([+-]\d+)?$/i);
 	if (!m)
 		return false;
-	var n = parseInt(m[1], 10) || 1, faces = parseInt(m[2], 10);
+	const n = parseInt(m[1], 10) || 1, faces = parseInt(m[2], 10);
 	if (n < 1 || n > 10 || faces < 2 || faces > 100)
 		return false;
-	var info = {n: n, faces: faces};
+	const info = {n, faces};
 	if (m[3])
 		info.bias = parseInt(m[3], 10);
 	return info;
@@ -438,28 +433,28 @@ exports.parse_dice = parse_dice;
 
 function readable_dice(bit, d) {
 	if (bit == '#flip')
-		return '#flip (' + (d[1] == 2) + ')';
+		return `#flip (${d[1] == 2})`;
 	if (bit == '#imfey')
-		return '#imfey (' + IMFEY[d[1] - 1] + ')';
+		return `#imfey (${IMFEY[d[1] - 1]})`;
 	if (bit == '#8ball')
-		return '#8ball (' + EIGHT_BALL[d[1] - 1] + ')';
-	var f = d[0], n = d.length, b = 0;
+		return `#8ball (${EIGHT_BALL[d[1] - 1]})`;
+	let f = d[0], n = d.length, b = 0;
 	if (d[n-1] && typeof d[n-1] == 'object') {
 		b = d[n-1].bias;
 		n--;
 	}
-	var r = d.slice(1, n);
+	const r = d.slice(1, n);
 	n = r.length;
 	bit += ' (';
-	var eq = n > 1 || b;
+	const eq = n > 1 || b;
 	if (eq)
 		bit += r.join(', ');
 	if (b)
-		bit += (b < 0 ? ' - ' + (-b) : ' + ' + b);
-	var sum = b;
-	for (var j = 0; j < n; j++)
+		bit += (b < 0) ? ` - ${-b}` : ` + ${b}`;
+	let sum = b;
+	for (let j = 0; j < n; j++)
 		sum += r[j];
-	return bit + (eq ? ' = ' : '') + sum + ')';
+	return `${bit}${eq ? ' = ' : ''}${sum})`;
 }
 
 /// 4th tokenization stage; populates dice rolls
@@ -469,9 +464,9 @@ OS.geimu = function (text) {
 		return;
 	}
 
-	var bits = text.split(dice_re);
-	for (var i = 0; i < bits.length; i++) {
-		var bit = bits[i];
+	const bits = text.split(dice_re);
+	for (let i = 0; i < bits.length; i++) {
+		const bit = bits[i];
 		if (!(i % 2) || !parse_dice(bit)) {
 			this.kinpira(bit);
 		}
@@ -482,7 +477,7 @@ OS.geimu = function (text) {
 			this.kinpira(bit);
 		}
 		else {
-			var d = this.dice.shift();
+			const d = this.dice.shift();
 			this.callback(safe('<strong>'));
 			this.strong = true; // for client DOM insertion
 			this.callback(readable_dice(bit, d));
@@ -498,14 +493,14 @@ OS.kinpira = function (text) {
 		this.itameshi(text);
 		return;
 	}
-	var bits = text.split(/[＾^]/);
+	const bits = text.split(/[＾^]/);
 	// remove trailing ^s
 	while (bits.length && bits[bits.length-1] == '')
 		bits.pop();
 
-	var soup = safe('<sup>');
+	let soup = safe('<sup>');
 	this.sup_level = 0;
-	for (var i = 0; i < bits.length; i++) {
+	for (let i = 0; i < bits.length; i++) {
 		if (bits[i])
 			this.itameshi(bits[i]);
 		if (i + 1 < bits.length && i < 5) {
@@ -515,7 +510,7 @@ OS.kinpira = function (text) {
 		}
 	}
 	// close all the sups we opened
-	var n = this.sup_level;
+	const n = this.sup_level;
 	this.sup_level = 0;
 	soup = safe('</sup>');
 	for (let i = 0; i < n; i++)
@@ -525,16 +520,16 @@ OS.kinpira = function (text) {
 /// 6th tokenization stage; parses individual *italic* *words*
 OS.itameshi = function (text) {
 	while (true) {
-		var m = /(^|[ .,;:?!(-])\*([^ *]+)\*($|[ .,;:?!)-])/.exec(text);
+		const m = /(^|[ .,;:?!(-])\*([^ *]+)\*($|[ .,;:?!)-])/.exec(text);
 		if (!m)
 			break;
 		if (m.index > 0) {
-			var before = text.slice(0, m.index);
+			const before = text.slice(0, m.index);
 			LINKIFY ? this.linkify(before) : this.callback(before);
 		}
 		if (m[1])
 			this.callback(m[1]);
-		this.callback(safe('<i>' + escape_html(m[2]) + '</i>'));
+		this.callback(safe(`<i>${escape_html(m[2])}</i>`));
 		text = text.slice(m.index + m[0].length - m[3].length);
 	}
 	if (text)
@@ -543,19 +538,17 @@ OS.itameshi = function (text) {
 
 // Convert text URLs to clickable links
 // *Not* recommended. Use at your own risk.
-var LINKIFY = false;
+const LINKIFY = false;
 
 /// optional 7th tokenization stage
 if (LINKIFY) { OS.linkify = function (text) {
 
-	var bits = text.split(/(https?:\/\/[^\s"<>^]*[^\s"<>'.,!?:;^])/);
-	for (var i = 0; i < bits.length; i++) {
+	const bits = text.split(/(https?:\/\/[^\s"<>^]*[^\s"<>'.,!?:;^])/);
+	for (let i = 0; i < bits.length; i++) {
 		if (i % 2) {
-			var e = escape_html(bits[i]);
+			const e = escape_html(bits[i]);
 			// open in new tab, and disavow target
-			this.callback(safe('<a href="' + e +
-					'" rel="nofollow noopener noreferrer" target="_blank">' +
-					e + '</a>'));
+			this.callback(safe(`<a href="${e}" rel="nofollow noopener noreferrer" target="_blank">${e}</a>`));
 		}
 		else
 			this.callback(bits[i]);
@@ -563,13 +556,13 @@ if (LINKIFY) { OS.linkify = function (text) {
 }; }
 
 function chibi(imgnm, src) {
-	var name = '', ext = '';
-	var m = imgnm.match(/^(.*)(\.\w{3,4})$/);
+	let name = '', ext = '';
+	const m = imgnm.match(/^(.*)(\.\w{3,4})$/);
 	if (m) {
 		name = m[1];
 		ext = m[2];
 	}
-	var bits = [safe('<a href="'), src, safe('" download="'), imgnm];
+	const bits = [safe('<a href="'), src, safe('" download="'), imgnm];
 	if (name.length >= 38) {
 		bits.push(safe('" title="'), imgnm);
 		imgnm = [name.slice(0, 30), safe('(&hellip;)'), ext];
@@ -579,36 +572,37 @@ function chibi(imgnm, src) {
 }
 
 OS.spoiler_info = function (index, toppu) {
-	var large = toppu || this.thumbStyle == 'large';
-	var hd = toppu || this.thumbStyle != 'small';
-	return {
-		thumb: encodeURI(mediaURL + 'kana/spoiler' + (hd ? '' : 's')
-				+ index + '.png'),
-		dims: large ? imagerConfig.THUMB_DIMENSIONS
-				: imagerConfig.PINKY_DIMENSIONS,
-	};
+	const large = toppu || this.thumbStyle == 'large';
+	const dims = large ? imagerConfig.THUMB_DIMENSIONS : imagerConfig.PINKY_DIMENSIONS;
+	const hd = toppu || this.thumbStyle != 'small';
+	const thumb = encodeURI(`${mediaURL}kana/spoiler${hd ? '' : 's'}${index}.png`);
+	return { dims, thumb };
 };
 
-var spoilerImages = imagerConfig.SPOILER_IMAGES;
+const spoilerImages = imagerConfig.SPOILER_IMAGES;
 
 function pick_spoiler(metaIndex) {
-	var imgs = spoilerImages;
-	var n = imgs.normal.length;
-	var count = n + imgs.trans.length;
-	var i;
+	const { normal, trans } = spoilerImages;
+	const n = normal.length;
+	const count = n + trans.length;
+	let i;
 	if (metaIndex < 0)
 		i = Math.floor(Math.random() * count);
 	else
 		i = metaIndex % count;
-	var spoiler = i < n ? imgs.normal[i] : imgs.trans[i - n];
-	return {index: spoiler, next: (i+1) % count};
+	const index = i < n ? normal[i] : trans[i - n];
+	const next = (i+1) % count;
+	return { index, next };
 }
 exports.pick_spoiler = pick_spoiler;
 
 function new_tab_link(srcEncoded, inside, cls) {
-	return [safe('<a href="' + srcEncoded + '" target="_blank"' +
-		(cls ? ' class="'+cls+'"' : '') +
-		' rel="noreferrer nofollow noopener">'), inside, safe('</a>')];
+	cls = cls ? ` class="${cls}"` : '';
+	return [
+		safe(`<a href="${srcEncoded}" target="_blank"${cls} rel="noreferrer nofollow noopener">`),
+		inside,
+		safe('</a>')
+	];
 }
 
 
@@ -625,7 +619,7 @@ OS.image_paths = function () {
 	return this._imgPaths;
 };
 
-var audioIndicator = "\u266B"; // musical note
+const audioIndicator = "\u266B"; // musical note
 
 OS.gazou = function (info, toppu) {
 	let src, caption, video;
@@ -660,18 +654,16 @@ OS.gazou = function (info, toppu) {
 exports.thumbStyles = ['small', 'sharp', 'large', 'hide'];
 
 OS.gazou_img = function (info, toppu) {
-	var src, thumb;
-	var imgPaths = this.image_paths();
+	let src, thumb;
+	const imgPaths = this.image_paths();
 	if (!info.vint)
 		src = thumb = encodeURI(imgPaths.src + info.src);
 
-	var d = info.dims;
-	var w = d[0], h = d[1], tw = d[2], th = d[3];
+	let [w, h, tw, th] = info.dims;
 	if (info.spoiler) {
-		var sp = this.spoiler_info(info.spoiler, toppu);
+		const sp = this.spoiler_info(info.spoiler, toppu);
 		thumb = sp.thumb;
-		tw = sp.dims[0];
-		th = sp.dims[1];
+		[tw, th] = sp.dims;
 	}
 	else if (info.vint) {
 		tw = tw || w;
@@ -693,19 +685,19 @@ OS.gazou_img = function (info, toppu) {
 		th = h;
 	}
 
-	var img = '<img src="'+thumb+'"';
+	let img = `<img src="${thumb}"`;
 	if (tw && th)
-		img += ' width="' +tw+'" height="'+th+'">';
+		img += ` width="${tw}" height="${th}">`;
 	else
 		img += '>';
 	if (imagerConfig.IMAGE_HATS)
 		img = '<span class="hat"></span>' + img;
-	img = new_tab_link(src, safe(img));
-	return {html: img, src: src};
+	const html = new_tab_link(src, safe(img));
+	return { html, src };
 };
 
 function readable_filesize(size) {
-	/* Dealt with it. */
+	/* Deal with it. */
 	if (size < 1024)
 		return size + ' B';
 	if (size < 1048576)
@@ -720,53 +712,46 @@ function pad(n) {
 }
 
 OS.readable_time = function (time) {
-	var h = this.tz_offset;
-	var offset;
+	const h = this.tz_offset;
+	let offset;
 	if (h || h == 0)
 		offset = h * 60 * 60 * 1000;
 	else /* would be nice not to construct new Dates all the time */
 		offset = new Date().getTimezoneOffset() * -60 * 1000;
-	var d = new Date(time + offset);
-	var k = "日月火水木金土"[d.getUTCDay()];
-	return (d.getUTCFullYear() + '/' + pad(d.getUTCMonth()+1) + '/' +
-		pad(d.getUTCDate()) + '&nbsp;(' + k + ') ' +
-		pad(d.getUTCHours()) + ':' +
-		pad(d.getUTCMinutes()));
+	const d = new Date(time + offset);
+	const k = "日月火水木金土"[d.getUTCDay()];
+	return `${d.getUTCFullYear()}/${pad(d.getUTCMonth()+1)}/${pad(d.getUTCDate())}&nbsp;(${k}) ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 };
 
 function datetime(time) {
-	var d = new Date(time);
-	return (d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' +
-		pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + ':' +
-		pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds()) + 'Z');
+	const d = new Date(time);
+	// surely there is a native way to do this?
+	return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
 }
 
 OS.post_url = function (num, op, quote) {
 	op = op || num;
-	return (this.op == op ? '' : op) + (quote ? '#q' : '#') + num;
+	return `${this.op == op ? '' : op}#${quote ? 'q' : ''}${num}`;
 };
 
 OS.post_ref = function (num, op, desc_html) {
-	var ref = '&gt;&gt;' + num;
+	let ref = '&gt;&gt;' + num;
 	if (desc_html)
 		ref += ' ' + desc_html;
 	else if (this.op && this.op != op)
 		ref += ' \u2192';
 	else if (num == op && this.op == op)
 		ref += ' (OP)';
-	return safe('<a href="'+this.post_url(num, op, false)+'">'+ref+'</a>');
+	return safe(`<a href="${this.post_url(num, op, false)}">${ref}</a>`);
 };
 
 OS.post_nav = function (post) {
-	var n = post.num, o = post.op;
-	return safe('<nav><a href="' + this.post_url(n, o, false) +
-			'">No.</a><a href="' + this.post_url(n, o, true) +
-			'">' + n + '</a></nav>');
+	const { num, op } = post;
+	return safe(`<nav><a href="${this.post_url(num, op, false)}">No.</a><a href="${this.post_url(num, op, true)}">${num}</a></nav>`);
 };
 
 function action_link_html(href, name, id) {
-	var span = '<span ' + (id ? 'id="'+id+'" ' : '') + 'class="act">';
-	return span + '<a href="'+href+'">'+name+'</a></span>';
+	return `<span ${id ? `id="${id}" ` : ''}class="act"><a href="${href}">${name}</a></span>`;
 }
 exports.action_link_html = action_link_html;
 
@@ -775,57 +760,53 @@ exports.reasonable_last_n = function (n) {
 };
 
 OS.last_n_html = function (num) {
-	return action_link_html(num + '?last' + this.lastN,
-			'Last&nbsp;' + this.lastN);
+	const { lastN } = this;
+	return action_link_html(`${num}?last${lastN}`, `Last&nbsp;${lastN}`);
 };
 
 OS.expansion_links_html = function (num, omit) {
-	var html = ' &nbsp; ' + action_link_html(num, 'Expand');
+	let html = ` &nbsp; ${action_link_html(num, 'Expand')}`;
 	if (omit > this.lastN)
 		html += ' ' + this.last_n_html(num);
 	return html;
 };
 
 OS.atama = function (data) {
-	var auth = data.auth;
-	var header = auth ? [safe('<b class="'),auth.toLowerCase(),safe('">')]
-			: [safe('<b>')];
-	if (data.subject)
-		header.unshift(safe('<h3>「'), data.subject, safe('」</h3> '));
-	if (data.name || !data.trip) {
-		header.push(data.name || DEFINES.ANON);
-		if (data.trip)
+	const { auth, subject, name, trip } = data;
+	const header = auth ? [safe('<b class="'), auth.toLowerCase(), safe('">')] : [safe('<b>')];
+	if (subject)
+		header.unshift(safe('<h3>「'), subject, safe('」</h3> '));
+	if (name || !trip) {
+		header.push(name || DEFINES.ANON);
+		if (trip)
 			header.push(' ');
 	}
-	if (data.trip)
-		header.push(safe('<code>' + data.trip + '</code>'));
+	if (trip)
+		header.push(safe(`<code>${trip}</code>`));
 	if (auth)
-		header.push(' ## ' + auth);
-	this.trigger('headerName', {header: header, data: data});
+		header.push(` ## ${auth}`);
+	this.trigger('headerName', { header, data });
 	header.push(safe('</b>'));
-	if (data.email) {
-		header.unshift(safe('<a class="email" href="mailto:'
-			+ encodeURI(data.email)
-			+ '" ref="noopener noreferrer" target="_blank">'));
+	const { email, time, op, num, omit } = data;
+	if (email) {
+		header.unshift(safe(`<a class="email" href="mailto:${encodeURI(email)}" ref="noopener noreferrer" target="_blank">`));
 		header.push(safe('</a>'));
 	}
-	header.push(safe(' <time datetime="' + datetime(data.time) +
-			'">' + this.readable_time(data.time) + '</time> '),
-			this.post_nav(data));
-	if (!this.full && !data.op) {
-		var ex = this.expansion_links_html(data.num, data.omit);
+	header.push(safe(` <time datetime="${datetime(time)}">${this.readable_time(time)}</time> `), this.post_nav(data));
+	if (!this.full && !op) {
+		const ex = this.expansion_links_html(num, omit);
 		header.push(safe(ex));
 	}
-	this.trigger('headerFinish', {header: header, data: data});
+	this.trigger('headerFinish', { header, data });
 	header.unshift(safe('<header>'));
 	header.push(safe('</header>\n\t'));
 	return header;
 };
 
 OS.monogatari = function (data, toppu) {
-	var tale = {header: this.atama(data)};
+	const tale = {header: this.atama(data)};
 	this.dice = data.dice;
-	var body = this.karada(data.body);
+	const body = this.karada(data.body);
 	tale.body = [safe('<blockquote>'), body, safe('</blockquote>')];
 	if (data.num == MILLION) {
 		tale.body.splice(1, 0, safe('<script>window.gravitas=true;</script>'));
@@ -835,21 +816,21 @@ OS.monogatari = function (data, toppu) {
 	return tale;
 };
 
-var MILLION = 1000000;
+const MILLION = 1000000;
 
 function gravitas_body() {
 	$('body').css({margin: 0});
 }
 
 OS.gravitas_style = function (idata, cssy) {
-	var src = this.image_paths().src + idata.src;
-	src = "url('" + encodeURI(src) + "')";
-	return cssy ? ("background-image: " + src + ";") : src;
+	let src = this.image_paths().src + idata.src;
+	src = `url('${encodeURI(src)}')`;
+	return cssy ? `background-image: ${src};` : src;
 };
 
 OS.mono = function (data) {
-	var info = {
-		data: data,
+	const info = {
+		data,
 		classes: data.editing ? ['editing'] : [],
 		style: ''
 	};
@@ -861,10 +842,11 @@ OS.mono = function (data) {
 			info.style = this.gravitas_style(data.image, true);
 	}
 	this.trigger('openArticle', info);
-	var cls = info.classes.length && info.classes.join(' '),
-	    o = [safe('\t<article id="'+data.num+'"'),
+	const { classes, style } = info;
+	let cls = classes.length && classes.join(' '),
+	    o = [safe(`\t<article id="${data.num}"`),
 		(cls ? [safe(' class="'), cls, safe('"')] : ''),
-		safe(info.style ? ' style="'+info.style+'"' : ''),
+		safe(style ? ` style="${style}"` : ''),
 		safe('>')],
 	    c = safe('</article>\n'),
 	    gen = this.monogatari(data, false);
@@ -872,21 +854,22 @@ OS.mono = function (data) {
 };
 
 OS.monomono = function (data, cls) {
-	if (data.flavor)
-		cls = cls ? cls+' '+data.flavor : data.flavor;
-	if (data.locked)
-		cls = cls ? cls+' locked' : 'locked';
-	var style;
-	if (data.num == MILLION) {
-		cls = cls ? cls+' gravitas' : 'gravitas';
-		if (data.image)
-			style = this.gravitas_style(data.image, true);
+	const { flavor, locked, num, image, hctr, imgctr, full } = data;
+	if (flavor)
+		cls = cls ? `${cls} ${flavor}` : flavor;
+	if (locked)
+		cls = cls ? `${cls} locked` : 'locked';
+	let style;
+	if (num == MILLION) {
+		cls = cls ? `${cls} gravitas` : 'gravitas';
+		if (image)
+			style = this.gravitas_style(image, true);
 	}
-	var o = [safe('<section id="' + data.num),
+	let o = [safe('<section id="' + num),
 		(cls ? [safe('" class="'), cls] : ''),
-		safe(style ? '" style="' + style : ''),
-		safe('" data-sync="' + (data.hctr || 0)),
-		safe(data.full ? '' : '" data-imgs="'+data.imgctr),
+		safe(style ? `" style="${style}` : ''),
+		safe(`" data-sync="${hctr || 0}`),
+		safe(full ? '' : `" data-imgs="${imgctr}`),
 		safe('">')],
 	    c = safe('</section>\n'),
 	    gen = this.monogatari(data, true);
@@ -894,19 +877,17 @@ OS.monomono = function (data, cls) {
 };
 
 function pluralize(n, noun) {
-	return n + ' ' + noun + (n == 1 ? '' : 's');
+	return `${n} ${noun}${n == 1 ? '' : 's'}`;
 }
 exports.pluralize = pluralize;
 
 exports.abbrev_msg = function (omit, img_omit) {
-	return omit + (omit==1 ? ' reply' : ' replies') + (img_omit
-		? ' and ' + pluralize(img_omit, 'image')
-		: '') + ' omitted.';
+	return `${omit} repl${omit==1 ? 'y' : 'ies'} ${img_omit ? `and ${pluralize(img_omit, 'image')} ` : ''}omitted.`;
 };
 
 exports.parse_name = function (name) {
-	var tripcode = '', secure = '';
-	var hash = name.indexOf('#');
+	let tripcode = '', secure = '';
+	let hash = name.indexOf('#');
 	if (hash >= 0) {
 		tripcode = name.substr(hash+1);
 		name = name.substr(0, hash);
@@ -918,8 +899,7 @@ exports.parse_name = function (name) {
 		tripcode = escape_html(tripcode);
 	}
 	name = name.trim().replace(config.EXCLUDE_REGEXP, '');
-	return [name.substr(0, 100), tripcode.substr(0, 128),
-			secure.substr(0, 128)];
+	return [name.substr(0, 100), tripcode.substr(0, 128), secure.substr(0, 128)];
 };
 
 function random_id() {
