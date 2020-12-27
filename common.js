@@ -510,7 +510,7 @@ OS.kinpira = function (text) {
 			this.itameshi(bits[i]);
 		if (i + 1 < bits.length && i < 5) {
 			// if there's more text, open a <sup>
-			this.itameshi(soup);
+			this.callback(soup);
 			this.sup_level++;
 		}
 	}
@@ -518,8 +518,8 @@ OS.kinpira = function (text) {
 	var n = this.sup_level;
 	this.sup_level = 0;
 	soup = safe('</sup>');
-	for (var i = 0; i < n; i++)
-		this.itameshi(soup);
+	for (let i = 0; i < n; i++)
+		this.callback(soup);
 };
 
 /// 6th tokenization stage; parses individual *italic* *words*
