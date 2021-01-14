@@ -172,7 +172,7 @@ function reveal_thumbnail(event) {
 	var $article = $(event.target);
 	var $img = $article.find('img');
 	if ($img.length) {
-		with_dom(function () { $img.show(); });
+		with_dom(() => $img.show());
 		return false;
 	}
 

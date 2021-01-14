@@ -26,9 +26,8 @@ HashingStream.prototype._write = function (chunk, encoding, cb) {
 HashingStream.prototype.end = function (cb) {
 	if (arguments.length > 1)
 		throw new Error("TODO multi-arg HashingStream.end");
-	var self = this;
-	stream.Writable.prototype.end.call(this, function () {
-		self._outStream.end(function () {
+	stream.Writable.prototype.end.call(this, () => {
+		this._outStream.end(() => {
 			if (cb)
 				cb();
 		});

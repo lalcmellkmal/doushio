@@ -1,24 +1,24 @@
-var lockTarget, lockKeyHeight;
-var $lockTarget, $lockIndicator;
-var lockedManually;
-var dropAndLockTimer;
+let lockTarget, lockKeyHeight;
+let $lockTarget, $lockIndicator;
+let lockedManually;
+let dropAndLockTimer;
 
-var nestLevel = 0;
+let nestLevel = 0;
 
 function with_dom(func) {
-	var lockHeight, locked = lockTarget, $post;
+	let lockHeight, locked = lockTarget, $post;
 	if (locked == PAGE_BOTTOM)
 		lockHeight = $DOC.height();
 	else if (locked) {
 		$post = $('#' + locked);
-		var r = $post.length && $post[0].getBoundingClientRect();
+		const r = $post.length && $post[0].getBoundingClientRect();
 		if (r && r.bottom > 0 && r.top < window.innerHeight)
 			lockHeight = r.top;
 		else
 			locked = false;
 	}
 
-	var ret;
+	let ret;
 	try {
 		nestLevel++;
 		ret = func.call(this);
@@ -29,12 +29,12 @@ function with_dom(func) {
 	}
 
 	if (locked == PAGE_BOTTOM) {
-		var height = $DOC.height();
+		const height = $DOC.height();
 		if (height > lockHeight - 10)
 			window.scrollBy(0, height - lockHeight + 10);
 	}
 	else if (locked && lockTarget == locked) {
-		var newY = $post[0].getBoundingClientRect().top;
+		const newY = $post[0].getBoundingClientRect().top;
 		window.scrollBy(0, newY - lockHeight);
 	}
 
@@ -49,7 +49,7 @@ function set_lock_target(num, manually) {
 	if (num == lockTarget)
 		return;
 	lockTarget = num;
-	var bottom = lockTarget == PAGE_BOTTOM;
+	const bottom = lockTarget == PAGE_BOTTOM;
 	if ($lockTarget)
 		$lockTarget.removeClass('scroll-lock');
 	if (num && !bottom && manually)
@@ -57,10 +57,10 @@ function set_lock_target(num, manually) {
 	else
 		$lockTarget = null;
 
-	var $ind = $lockIndicator;
+	const $ind = $lockIndicator;
 	if ($ind) {
-		var visible = bottom || manually;
-		$ind.css({visibility: visible ? 'visible' : 'hidden'});
+		const visibility = (bottom || manually) ? 'visible' : 'hidden';
+		$ind.css({ visibility });
 		if (bottom)
 			$ind.text('Locked to bottom');
 		else if (num) {
@@ -72,18 +72,18 @@ function set_lock_target(num, manually) {
 	}
 }
 
-oneeSama.hook('menuOptions', function (info) {
-	var opts = info.options;
+oneeSama.hook('menuOptions', (info) => {
+	const opts = info.options;
 	if (lockTarget && info.model && lockTarget == info.model.id)
 		opts.splice(opts.indexOf('Focus'), 1, 'Unfocus');
 });
 
-Backbone.on('hide', function (model) {
+Backbone.on('hide', (model) => {
 	if (model && model.id == lockTarget)
 		set_lock_target(null);
 });
 
-connSM.on('dropped', function () {
+connSM.on('dropped', () => {
 	if (!dropAndLockTimer)
 		dropAndLockTimer = setTimeout(drop_and_lock, 10 * 1000);
 });
@@ -94,13 +94,13 @@ function drop_and_lock() {
 	// On connection drop, focus the last post.
 	// This to prevent jumping to thread bottom on reconnect.
 	if (CurThread && !lockedManually) {
-		var last = CurThread.get('replies').last();
+		const last = CurThread.get('replies').last();
 		if (last)
 			set_lock_target(last.id, false);
 	}
 }
 
-connSM.on('synced', function () {
+connSM.on('synced', () => {
 	// If we dropped earlier, stop focusing now.
 	if (!lockedManually)
 		set_lock_target(null);
@@ -110,20 +110,21 @@ connSM.on('synced', function () {
 	}
 });
 
-var at_bottom = function() {
+let at_bottom = function () {
 	return window.scrollY + window.innerHeight >= $DOC.height() - 5;
 }
-if (window.scrollMaxY !== undefined)
+if (window.scrollMaxY !== undefined) {
 	at_bottom = function () {
 		return window.scrollMaxY <= window.scrollY;
 	};
+}
 
 (function () {
-	menuHandlers.Focus = function (model) {
-		var num = model && model.id;
+	menuHandlers.Focus = (model) => {
+		const num = model && model.id;
 		set_lock_target(num, true);
 	};
-	menuHandlers.Unfocus = function () {
+	menuHandlers.Unfocus = () => {
 		set_lock_target(null);
 	};
 

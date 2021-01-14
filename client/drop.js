@@ -3,15 +3,15 @@
 function drop_shita(e) {
 	e.stopPropagation();
 	e.preventDefault();
-	var files = e.dataTransfer.files;
+	const { files } = e.dataTransfer;
 	if (!files.length)
 		return;
 	if (!postForm) {
-		with_dom(function () {
+		with_dom(() => {
 			if (THREAD)
 				open_post_box(THREAD);
 			else {
-				var $s = $(e.target).closest('section');
+				const $s = $(e.target).closest('section');
 				if (!$s.length)
 					return;
 				open_post_box($s.attr('id'));
@@ -19,8 +19,8 @@ function drop_shita(e) {
 		});
 	}
 	else {
-		var attrs = postForm.model.attributes;
-		if (attrs.uploading || attrs.uploaded)
+		const { uploading, uploaded } = postForm.model.attributes;
+		if (uploading || uploaded)
 			return;
 	}
 
@@ -29,13 +29,13 @@ function drop_shita(e) {
 		return;
 	}
 
-	var extra = postForm.prep_upload();
-	var fd = new FormData();
+	const extra = postForm.prep_upload();
+	const fd = new FormData();
 	fd.append('image', files[0]);
-	for (var k in extra)
+	for (let k in extra)
 		fd.append(k, extra[k]);
 	/* Can't seem to jQuery this shit */
-	var xhr = new XMLHttpRequest();
+	const xhr = new XMLHttpRequest();
 	xhr.open('POST', image_upload_url());
 	xhr.setRequestHeader('Accept', 'application/json');
 	xhr.onreadystatechange = upload_shita;
@@ -47,7 +47,7 @@ function drop_shita(e) {
 function upload_shita() {
 	if (this.readyState != 4 || this.status == 202)
 		return;
-	var err = this.responseText;
+	let err = this.responseText;
 	if (this.status != 500 || !err || err.length > 100)
 		err = "Couldn't get response.";
 	postForm.upload_error(err)

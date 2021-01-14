@@ -1,6 +1,8 @@
 (function () {
 
-var socket, attempts, attemptTimer, pingTimer;
+const PING_INTERVAL = 25 * 1000;
+
+let socket, attempts, attemptTimer, pingTimer;
 
 window.send = function (msg) {
 	// need deferral or reporting on these lost messages...
@@ -18,26 +20,23 @@ window.send = function (msg) {
 	socket.send(msg);
 };
 
-const pong = '[[0,' + PING + ']]';
+const pong = `[[0,${PING}]]`;
 
 function on_message(e) {
 	if (e == pong)
 		return;
 	if (config.DEBUG)
 		console.log('>', e.data);
-	var msgs = JSON.parse(e.data);
+	const msgs = JSON.parse(e.data);
 
-	with_dom(function () {
-
-	for (var i = 0; i < msgs.length; i++) {
-		var msg = msgs[i];
-		var op = msg.shift();
-		var type = msg.shift();
-		if (is_pubsub(type) && op in syncs)
-			syncs[op]++;
-		dispatcher[type](msg, op);
-	}
-
+	with_dom(() => {
+		for (let msg of msgs) {
+			const op = msg.shift();
+			const type = msg.shift();
+			if (is_pubsub(type) && op in syncs)
+				syncs[op]++;
+			dispatcher[type](msg, op);
+		}
 	});
 }
 
@@ -45,7 +44,7 @@ function sync_status(msg, hover) {
 	$('#sync').text(msg).attr('class', hover ? 'error' : '');
 }
 
-connSM.act('load + start -> conn', function () {
+connSM.act('load + start -> conn', () => {
 	sync_status('Connecting...', false);
 	attempts = 0;
 	connect();
@@ -68,29 +67,27 @@ function connect() {
 		window.socket = socket;
 }
 
-window.new_socket = function (attempt) {
-	const protocols = ['websocket', 'xhr-streaming'];
+window.new_socket = (attempt) => {
+	const transports = ['websocket', 'xhr-streaming'];
 	let url = config.SOCKET_PATH;
 	if (typeof ctoken != 'undefined') {
-		url += '?' + $.param({ctoken: ctoken});
+		url += '?' + $.param({ctoken});
 	}
-	return new SockJS(url, null, {
-		transports: protocols,
-	});
+	return new SockJS(url, null, {transports});
 };
 
-connSM.act('conn, reconn + open -> syncing', function () {
+connSM.act('conn, reconn + open -> syncing', () => {
 	sync_status('Syncing...', false);
 	CONN_ID = random_id();
 	send([SYNCHRONIZE, CONN_ID, BOARD, syncs, BUMP, document.cookie]);
 	if (pingTimer)
 		clearInterval(pingTimer);
-	pingTimer = setInterval(ping, 25000);
+	pingTimer = setInterval(ping, PING_INTERVAL);
 });
 
-connSM.act('syncing + sync -> synced', function () {
+connSM.act('syncing + sync -> synced', () => {
 	sync_status('Synced.', false);
-	attemptTimer = setTimeout(function () {
+	attemptTimer = setTimeout(() => {
 		attemptTimer = 0;
 		reset_attempts();
 	}, 10000);
@@ -104,7 +101,7 @@ function reset_attempts() {
 	attempts = 0;
 }
 
-connSM.act('* + close -> dropped', function (e) {
+connSM.act('* + close -> dropped', (e) => {
 	if (socket) {
 		socket.onclose = null;
 		socket.onmessage = null;
@@ -122,23 +119,23 @@ connSM.act('* + close -> dropped', function (e) {
 	sync_status('Dropped.', true);
 
 	attempts++;
-	var n = Math.min(Math.floor(attempts/2), 12);
-	var wait = 500 * Math.pow(1.5, n);
+	const n = Math.min(Math.floor(attempts/2), 12);
+	const wait = 500 * Math.pow(1.5, n);
 	// wait maxes out at ~1min
 	setTimeout(connSM.feeder('retry'), wait);
 });
 
-connSM.act('dropped + retry -> reconn', function () {
+connSM.act('dropped + retry -> reconn', () => {
 	connect();
 	/* Don't show this immediately so we don't thrash on network loss */
-	setTimeout(function () {
+	setTimeout(() => {
 		if (connSM.state == 'reconn')
 			sync_status('Reconnecting...', true);
 	}, 100);
 });
 
-connSM.act('* + invalid, desynced + close -> desynced', function (msg) {
-	msg = (msg && msg[0]) ? 'Out of sync: ' + msg[0] : 'Out of sync.';
+connSM.act('* + invalid, desynced + close -> desynced', (msg) => {
+	msg = (msg && msg[0]) ? `Out of sync: ${msg[0]}` : 'Out of sync.';
 	sync_status(msg, true);
 	if (attemptTimer) {
 		clearTimeout(attemptTimer);
@@ -153,13 +150,13 @@ connSM.act('* + invalid, desynced + close -> desynced', function (msg) {
 });
 
 function window_focused() {
-	var s = connSM.state;
+	const s = connSM.state;
 	if (s == 'desynced')
 		return;
 	// might have just been suspended;
 	// try to get our SM up to date if possible
 	if (s == 'synced' || s == 'syncing' || s == 'conn') {
-		var rs = socket.readyState;
+		const rs = socket.readyState;
 		if (rs != SockJS.OPEN && rs != SockJS.CONNECTING) {
 			connSM.feed('close');
 			return;
@@ -175,7 +172,7 @@ function window_focused() {
 
 function ping() {
 	if (socket.readyState == SockJS.OPEN)
-		socket.send('['+PING+']');
+		socket.send(`[${PING}]`);
 	else if (pingTimer) {
 		clearInterval(pingTimer);
 		pingTimer = 0;
@@ -184,10 +181,10 @@ function ping() {
 
 (function () {
 	_.defer(connSM.feeder('start'));
-	$(window).focus(function () {
+	$(window).focus(() => {
 		setTimeout(window_focused, 20);
 	});
-	window.addEventListener('online', function () {
+	window.addEventListener('online', () => {
 		reset_attempts();
 		connSM.feed('retry');
 	});

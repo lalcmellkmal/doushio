@@ -639,11 +639,10 @@ show_placeholder: function () {
 },
 
 on_blur: function () {
-	var self = this;
 	// minor delay to avoid flashing when finishing posts
-	setTimeout(function () {
-		if (!self.$input.is(':focus'))
-			self.show_placeholder();
+	setTimeout(() => {
+		if (!this.$input.is(':focus'))
+			this.show_placeholder();
 	}, 500);
 },
 
@@ -831,21 +830,20 @@ remove: function () {
 },
 
 render_buttons: function () {
-	var attrs = this.model.attributes;
-	var allocWait = attrs.sentAllocRequest && !attrs.num;
-	var d = attrs.uploading || allocWait;
-	var self = this;
-	with_dom(function () {
+	const { num, sentAllocRequest, uploaded, uploading, uploadStatus } = this.model.attributes;
+	const allocWait = sentAllocRequest && !num;
+	const d = uploading || allocWait;
+	with_dom(() => {
 		/* Beware of undefined! */
-		self.submit.prop('disabled', !!d);
-		if (attrs.uploaded)
-			self.submit.css({'margin-left': '0'});
-		self.$cancel.prop('disabled', !!allocWait);
-		self.$cancel.toggle(!!(!attrs.num || attrs.uploading));
-		self.$imageInput.prop('disabled', !!attrs.uploading);
-		self.$uploadStatus.text(attrs.uploadStatus);
-		var auto = options.get('autocomplete') ? 'on' : 'off';
-		self.$input.attr({autocapitalize: auto, autocomplete: auto,
+		this.submit.prop('disabled', !!d);
+		if (uploaded)
+			this.submit.css({'margin-left': '0'});
+		this.$cancel.prop('disabled', !!allocWait);
+		this.$cancel.toggle(!!(!num || uploading));
+		this.$imageInput.prop('disabled', !!uploading);
+		this.$uploadStatus.text(uploadStatus);
+		const auto = options.get('autocomplete') ? 'on' : 'off';
+		this.$input.attr({autocapitalize: auto, autocomplete: auto,
 			autocorrect: auto, spellcheck: auto == 'on'});
 	});
 },
@@ -853,8 +851,8 @@ render_buttons: function () {
 prep_upload: function () {
 	this.model.set('uploadStatus', UPLOADING_MSG);
 	this.$input.focus();
-	var attrs = this.model.attributes;
-	return {spoiler: attrs.spoiler, op: attrs.op || 0};
+	const { spoiler, op } = this.model.attributes;
+	return {spoiler, op: op || 0};
 },
 
 notify_uploading: function () {

@@ -36,11 +36,10 @@ try {
 
 const RES = STATE.resources;
 
-dispatcher[common.PING] = function (msg, client) {
+dispatcher[common.PING] = async function (msg, client) {
 	if (msg.length)
-		return false;
+		throw Muggle("Extra ping data.", JSON.stringify(msg));
 	client.send([0, common.PING]);
-	return true;
 };
 
 dispatcher[common.SYNCHRONIZE] = async function (msg, client) {
