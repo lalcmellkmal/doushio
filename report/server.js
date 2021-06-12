@@ -1,15 +1,14 @@
-var caps = require('../server/caps'),
+const caps = require('../server/caps'),
     config = require('./config'),
     common = require('../common'),
     db = require('../db'),
     mainConfig = require('../config'),
     msgcheck = require('../server/msgcheck'),
-    nodemailer = require('nodemailer'),
     okyaku = require('../server/okyaku'),
     Recaptcha2 = require('recaptcha2'),
     winston = require('winston');
 
-var SMTP = nodemailer.createTransport(config.SMTP);
+const SMTP = config.SMTP && require('nodemailer').createTransport(config.SMTP);
 
 var VALIDATOR;
 if (!!config.RECAPTCHA_SITE_KEY) {
@@ -68,8 +67,8 @@ function report(reporter_ident, op, num, cb) {
 }
 
 function send_report(reporter, board, op, num, body, html, cb) {
-	var noun;
-	var url = config.MAIL_THREAD_URL_BASE + board + '/' + op + '?reported';
+	let noun;
+	let url = `${config.MAIL_THREAD_URL_BASE}${board}/${op}?reported`;
 	if (op == num) {
 		noun = 'Thread';
 	}
@@ -77,24 +76,29 @@ function send_report(reporter, board, op, num, body, html, cb) {
 		noun = 'Post';
 		url += '#' + num;
 	}
+	const subject = `${noun} #${num} reported by ${reporter}`;
 
-	body = body ? (body + '\n\n' + url) : url;
+	body = body ? `${body}\n\n${url}` : url;
 	if (html.length)
 		html.push(safe('<br><br>'));
 	html.push(safe('<a href="'), url, safe('">'), '>>'+num, safe('</a>'));
 
-	var opts = {
-		from: config.MAIL_FROM,
-		to: config.MAIL_TO.join(', '),
-		subject: noun + ' #' + num + ' reported by ' + reporter,
-		text: body,
-		html: common.flatten(html).join(''),
-	};
-	SMTP.sendMail(opts, function (err, resp) {
-		if (err)
-			return cb(err);
-		cb(null);
-	});
+	if (SMTP) {
+		const opts = {
+			from: config.MAIL_FROM,
+			to: config.MAIL_TO.join(', '),
+			subject,
+			text: body,
+			html: common.flatten(html).join(''),
+		};
+		setTimeout(() => {
+			SMTP.sendMail(opts, (err, resp) => err ? cb(err) : cb(null));
+		}, 0);
+	}
+
+	if (!SMTP) {
+		winston.warn(`Reporting not configured!\n${subject}\n${body}`);
+	}
 }
 
 function image_preview(info) {

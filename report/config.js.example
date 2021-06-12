@@ -4,6 +4,7 @@ module.exports = {
 	MAIL_THREAD_URL_BASE: 'http://your.board.index/',
 	MAIL_MEDIA_URL: 'http://your.board.index/media/',
 
+	/* optional nodemailer config */
 	SMTP: {
 		service: 'Gmail',
 		auth: {
