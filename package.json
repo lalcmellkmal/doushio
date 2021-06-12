@@ -18,7 +18,6 @@
 		"start": "node server/server.js"
 	},
 	"dependencies": {
-		"async": "2.6.1",
 		"formidable": "1.0.17",
 		"ip": "1.1.5",
 		"minimist": "^1.2.5",
