@@ -5,9 +5,10 @@ const config = require('./config'),
     make_client = require('./make_client').make_maybe_minified,
     pathJoin = require('path').join,
     stream = require('stream'),
-    tmp_file = require('tmp').file,
+    tmp_promise = require('tmp-promise'),
     util = require('util');
 
+const TMP_BUILD_DIR = '.build';
 const PUBLIC_JS = pathJoin('www', 'js');
 
 function HashingStream(out) {
@@ -54,30 +55,32 @@ function end_and_move_js(stream, dir, prefix) {
 }
 
 
-function make_hashing_stream() {
-	return new Promise((resolve, reject) => {
-		const opts = {dir: '.build', postfix: '.gen.js', mode: 0644};
-		tmp_file(opts, (err, tmp, fd) => {
-			if (err)
-				return reject(err);
-			const out = fs.createWriteStream(null, {fd: fd});
-			out.once('error', reject);
-
-			if (config.DEBUG) {
-				out._tmpFilename = tmp;
-				resolve(out);
-			}
-			else {
-				const stream = new HashingStream(out);
-				stream._tmpFilename = tmp;
-				resolve(stream);
-			}
-		});
+async function make_hashing_stream(prefix) {
+	const opts = {tmpdir: TMP_BUILD_DIR, prefix, postfix: '.gen.js', mode: 0o644};
+	const {fd, path, cleanup} = await tmp_promise.file(opts);
+	const out = fs.createWriteStream(null, {fd});
+	out.once('error', err => {
+		try {
+			cleanup();
+		}
+		finally {
+			throw new Error('unrecoverable hashing stream error', err);
+		}
 	});
+
+	if (config.DEBUG) {
+		out._tmpFilename = path;
+		return out;
+	}
+	else {
+		const stream = new HashingStream(out);
+		stream._tmpFilename = path;
+		return stream;
+	}
 }
 
 async function build_vendor_js(deps) {
-	const stream = await make_hashing_stream();
+	const stream = await make_hashing_stream('vendor-');
 	const write = util.promisify(stream.write).bind(stream);
 	for (const filename of deps.VENDOR_DEPS) {
 		const buf = await etc.readFile(filename);
@@ -87,36 +90,27 @@ async function build_vendor_js(deps) {
 }
 
 async function build_client_js(deps) {
-	const stream = await make_hashing_stream();
+	const stream = await make_hashing_stream('client-');
 	await make_client(deps.CLIENT_DEPS, stream);
 	return await end_and_move_js(stream, PUBLIC_JS, 'client');
 }
 
 async function build_mod_client_js(deps) {
-	const stream = await make_hashing_stream();
+	const stream = await make_hashing_stream('mod-');
 	await make_client(deps.MOD_CLIENT_DEPS, stream);
 	return await end_and_move_js(stream, 'state', 'mod');
 }
 
-function commit_assets(metadata) {
-	return new Promise((resolve, reject) => {
-		tmp_file({dir: '.build', postfix: '.json'}, (err, tmp, fd) => {
-			if (err)
-				return reject(err);
-			const stream = fs.createWriteStream(null, {fd});
-			stream.once('error', reject);
-			stream.end(JSON.stringify(metadata) + '\n', () => {
-				etc.move(tmp, pathJoin('state', 'scripts.json'))
-					.then(resolve, reject);
-			});
-		});
-	});
+async function commit_assets(metadata) {
+	const path = await tmp_promise.tmpName({ tmpdir: TMP_BUILD_DIR, template: 'assets-XXXXXX.json' });
+	await fs.promises.writeFile(path, JSON.stringify(metadata) + '\n', 'utf8');
+	await etc.move(path, pathJoin('state', 'scripts.json'));
 }
 
 async function rebuild() {
 	await Promise.all([
 		etc.checked_mkdir('state'),
-		etc.checked_mkdir('.build'),
+		etc.checked_mkdir(TMP_BUILD_DIR),
 	]);
 	const deps = require('./deps');
 	const [vendor, client, mod] = await Promise.all([
