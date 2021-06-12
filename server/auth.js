@@ -211,7 +211,7 @@ exports.logout = function (req, resp) {
 		if (err)
 			return respond_error(resp, "Logout error.");
 		r.del('session:' + cookie);
-		respond_ok(req, resp, 'a=; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+		respond_ok(req, resp, 'a=; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict');
 	});
 };
 
@@ -248,7 +248,7 @@ function make_expiry() {
 }
 
 function make_cookie(key, val) {
-	let header = `${key}=${val}; Expires=${make_expiry()}`;
+	let header = `${key}=${val}; Expires=${make_expiry()}; SameSite=Strict`;
 	const domain = config.LOGIN_COOKIE_DOMAIN;
 	if (domain)
 		header += '; Domain=' + domain;
