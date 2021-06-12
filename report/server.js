@@ -1,6 +1,7 @@
 const caps = require('../server/caps'),
     config = require('./config'),
     common = require('../common'),
+    { safe } = common,
     db = require('../db'),
     mainConfig = require('../config'),
     msgcheck = require('../server/msgcheck'),
@@ -19,39 +20,37 @@ if (!!config.RECAPTCHA_SITE_KEY) {
 	exports.enabled = true;
 }
 
-var safe = common.safe;
-
 function report(reporter_ident, op, num, cb) {
-
-	var board = caps.can_access_thread(reporter_ident, op);
+	const board = caps.can_access_thread(reporter_ident, op);
 	if (!board)
 		return cb("Post does not exist.");
 
-	var reporter = maybe_mnemonic(reporter_ident.ip) || '???';
+	const reporter = maybe_mnemonic(reporter_ident.ip) || '???';
 
-	var yaku = new db.Yakusoku(board, {auth: 'Moderator'});
-	var reader = new db.Reader(yaku);
-	var kind = op == num ? 'thread' : 'post';
-	reader.get_posts(kind, [num], {}, function (err, posts) {
+	const yaku = new db.Yakusoku(board, {auth: 'Moderator'});
+	const reader = new db.Reader(yaku);
+	const kind = op == num ? 'thread' : 'post';
+	reader.get_posts(kind, [num], {}, (err, posts) => {
 		if (err || !posts[0]) {
 			if (err)
 				console.error(err);
-			send_report(reporter, board, op, num, '', [], cb);
+			const message = `(${kind} missing)`;
+			send_report(reporter, board, op, num, message, [message], cb);
 			return;
 		}
 
-		var post = posts[0];
-		var name = (post.name || common.ANON)
+		const post = posts[0];
+		let name = post.name || common.ANON;
 		if (name.length > 23)
 			name = name.slice(0, 20) + '...';
 		if (post.trip)
 			name += ' # ' + post.trip;
 		if (post.ip)
 			name += ' # ' + maybe_mnemonic(post.ip);
-		var body = 'Offender: ' + name;
-		var html = ['Offender: ', safe('<b>'), name, safe('</b>')];
+		let body = 'Offender: ' + name;
+		let html = ['Offender: ', safe('<b>'), name, safe('</b>')];
 
-		var img;
+		let img;
 		if (post.image && !post.hideimg)
 			img = image_preview(post.image);
 		if (img) {
@@ -104,7 +103,8 @@ function send_report(reporter, board, op, num, body, html, cb) {
 function image_preview(info) {
 	if (!info.dims)
 		return;
-	var tw = info.dims[2], th = info.dims[3];
+	// DRY
+	let tw = info.dims[2], th = info.dims[3];
 	if (info.mid) {
 		tw *= 2;
 		th *= 2;
@@ -116,10 +116,8 @@ function image_preview(info) {
 	if (!tw || !th)
 		return;
 
-	var mediaURL = config.MAIL_MEDIA_URL;
-	if (!mediaURL)
-		mediaURL = require('../imager/config').MEDIA_URL;
-	var src;
+	const mediaURL = config.MAIL_MEDIA_URL || require('../imager/config').MEDIA_URL;
+	let src;
 	if (info.mid)
 		src = mediaURL + '/mid/' + info.mid;
 	else if (info.realthumb || info.thumb)
@@ -127,14 +125,14 @@ function image_preview(info) {
 	else
 		return;
 
-	var title = common.readable_filesize(info.size);
-	return {src: src, width: tw, height: th, title: title};
+	const title = common.readable_filesize(info.size);
+	return {src, width: tw, height: th, title};
 }
 
 function maybe_mnemonic(ip) {
 	if (ip && mainConfig.IP_MNEMONIC) {
-		var authcommon = require('../admin/common');
-		ip = authcommon.ip_mnemonic(ip);
+		const { ip_mnemonic } = require('../admin/common');
+		ip = ip_mnemonic(ip);
 	}
 	return ip;
 }
