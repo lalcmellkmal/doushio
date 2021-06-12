@@ -31,7 +31,7 @@ Dependencies:
 
 * ImageMagick
 * libpng
-* node.js + npm
+* node 10+
 * `npm install -g node-gyp`
 * redis
 * ffmpeg 2.2+ if supporting WebM
