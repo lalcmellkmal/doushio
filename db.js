@@ -416,27 +416,6 @@ Y.disconnect = function () {
 	this.removeAllListeners('end');
 };
 
-// TODO use Map, Promises
-function forEachInObject(obj, f, callback) {
-	let total = 0, complete = 0, done = false, errors = [];
-	const cb = (err) => {
-		complete++;
-		if (err)
-			errors.push(err);
-		if (done && complete == total)
-			callback(errors.length ? errors : null);
-	};
-	for (let k in obj) {
-		if (obj.hasOwnProperty(k)) {
-			total++;
-			f(k, cb);
-		}
-	}
-	done = true;
-	if (complete == total)
-		callback(errors.length ? errors : null);
-}
-
 Y.target_key = function (id) {
 	return (id == 'live') ? 'tag:' + this.tag : 'thread:' + id;
 };
@@ -1738,28 +1717,6 @@ function flatten_post(info) {
 		post.dice = dice.substring(1, dice.length - 1);
 	}
 }
-
-function with_body(r, key, post, callback) {
-	if (post.body !== undefined)
-		callback(null, post);
-	else
-		r.get(key + ':body', (err, body) => {
-			if (err)
-				return callback(err);
-			if (body !== null) {
-				post.body = body;
-				post.editing = true;
-				return callback(null, post);
-			}
-			// Race condition between finishing posts
-			r.hget(key, 'body', (err, body) => {
-				if (err)
-					return callback(err);
-				post.body = body || '';
-				callback(null, post);
-			});
-		});
-};
 
 function subject_val(op, subject) {
 	return subject && (op + ':' + subject);
