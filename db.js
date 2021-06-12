@@ -73,6 +73,8 @@ process.nextTick(() => {
 
 /* REAL-TIME UPDATES */
 
+/// Used by Yakusoku to listen to redis pubsub channels.
+/// Probably should migrate to Redis Streams instead.
 function Subscription(targetInfo) {
 	events.EventEmitter.call(this);
 	this.setMaxListeners(0);
@@ -395,6 +397,7 @@ exports.is_board = (board) => config.BOARDS.includes(board);
 
 exports.UPKEEP_IDENT = {auth: 'Upkeep', ip: '127.0.0.1'};
 
+/// The main connection to real-time posting in Redis.
 function Yakusoku(board, ident) {
 	events.EventEmitter.call(this);
 	this.id = ++(cache.YAKUMAN);
@@ -420,6 +423,7 @@ Y.target_key = function (id) {
 	return (id == 'live') ? 'tag:' + this.tag : 'thread:' + id;
 };
 
+/// start listening for real-time updates
 Y.kiku = async function (targets, on_update, on_sink) {
 	this.on_update = on_update;
 	this.on_sink = on_sink;
@@ -436,6 +440,7 @@ Y.kiku = async function (targets, on_update, on_sink) {
 	await Promise.all(promises);
 };
 
+/// stop listening to real-time updates
 Y.kikanai = function () {
 	if (!this.on_update)
 		return;
@@ -1292,6 +1297,7 @@ function lua_get_thread(r, key, abbrev, cb) {
 	});
 }
 
+/// Pulls full threads from a Yakusoku.
 function Reader(yakusoku) {
 	events.EventEmitter.call(this);
 	this.y = yakusoku;
