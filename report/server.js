@@ -10,43 +10,8 @@ const caps = require('../server/caps'),
     winston = require('winston');
 
 const SMTP = config.SMTP && require('nodemailer').createTransport(config.SMTP);
-const TELEGRAM = config.TELEGRAM_TOKEN && (() => {
-	const TelegramBot = require('node-telegram-bot-api');
-	return new TelegramBot(config.TELEGRAM_TOKEN, { polling: true });
-})();
-if (TELEGRAM) {
-	TELEGRAM.onText(/\/register\s*(.*)/, async ({ from }, match) => {
-		const { id } = from;
-		const password = match[1];
-		if (password !== config.TELEGRAM_PASSWORD) {
-			TELEGRAM.sendMessage(id, 'Wrong password, sorry!');
-			return;
-		}
-		const r = global.redis;
-		try {
-			const added = await r.promise.hset('telegram:mods', id, '0');
-			TELEGRAM.sendMessage(id, added > 0 ? "You're on the list!" : "Re-registered...?");
-		} catch (err) {
-			winston.error('/register', id, err);
-			TELEGRAM.sendMessage(id, "Something's gone horribly wrong.");
-		}
-	});
-	TELEGRAM.onText(/\/deregister/, async ({ from }) => {
-		const { id } = from;
-		// This seems abuseable?
-		const r = global.redis;
-		try {
-			const removed = await r.promise.hdel('telegram:mods', id);
-			TELEGRAM.sendMessage(id, removed > 0 ? "So long~" : "You're not registered to start with!");
-		} catch (err) {
-			winston.error('/deregister', id, err);
-			TELEGRAM.sendMessage(id, "Whoopsie!");
-		}
-	});
-	TELEGRAM.onText(/\/nipah/, ({ from }) => TELEGRAM.sendMessage(from.id, 'mii'));
-	TELEGRAM.on('photo', ({ from }) => TELEGRAM.sendMessage(from.id, 'HNNNNGGGGGG'));
-	winston.info('Polling Telegram bot.');
-}
+
+const TELEGRAM = !!config.TELEGRAM_TOKEN && require('./telegram').install();
 
 var VALIDATOR;
 if (!!config.RECAPTCHA_SITE_KEY) {
@@ -122,15 +87,8 @@ async function send_report(reporter, board, op, num, body, html) {
 		}));
 	}
 	if (TELEGRAM) {
-		promises.push((async () => {
-			const r = global.redis;
-			const mods = await r.promise.hgetall('telegram:mods');
-			const message = `${subject}\n${body}`;
-			for (let id in mods) {
-				// TODO if this errors, increment the error count, and possibly eject the user
-				await TELEGRAM.sendMessage(id, message);
-			}
-		})());
+		const message = `${subject}\n${body}`;
+		promises.push(TELEGRAM.broadcastToMods(message));
 	}
 
 	if (promises.length) {
