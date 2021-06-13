@@ -35,7 +35,7 @@ function report(reporter_ident, op, num, cb) {
 			if (err)
 				console.error(err);
 			const message = `(${kind} missing)`;
-			send_report(reporter, board, op, num, message, [message], cb);
+			send_report(reporter, board, op, num, message, [message]).then(() => cb(null), cb);
 			return;
 		}
 
@@ -61,11 +61,11 @@ function report(reporter_ident, op, num, cb) {
 				safe('" title="'), img.title, safe('">'));
 		}
 
-		send_report(reporter, board, op, num, body, html, cb);
+		send_report(reporter, board, op, num, body, html).then(() => cb(null), cb);
 	});
 }
 
-function send_report(reporter, board, op, num, body, html, cb) {
+async function send_report(reporter, board, op, num, body, html) {
 	let noun;
 	let url = `${config.MAIL_THREAD_URL_BASE}${board}/${op}?reported`;
 	if (op == num) {
@@ -82,6 +82,7 @@ function send_report(reporter, board, op, num, body, html, cb) {
 		html.push(safe('<br><br>'));
 	html.push(safe('<a href="'), url, safe('">'), '>>'+num, safe('</a>'));
 
+	const promises = [];
 	if (SMTP) {
 		const opts = {
 			from: config.MAIL_FROM,
@@ -90,13 +91,16 @@ function send_report(reporter, board, op, num, body, html, cb) {
 			text: body,
 			html: common.flatten(html).join(''),
 		};
-		setTimeout(() => {
-			SMTP.sendMail(opts, (err, resp) => err ? cb(err) : cb(null));
-		}, 0);
+		promises.push(new Promise((resolve, reject) => {
+			SMTP.sendMail(opts, (err, _resp) => err ? reject(err) : resolve());
+		}));
 	}
 
-	if (!SMTP) {
+	if (promises.length) {
+		await Promise.all(promises);
+	} else {
 		winston.warn(`Reporting not configured!\n${subject}\n${body}`);
+		throw new Error('Reporting not configured, sorry!');
 	}
 }
 
