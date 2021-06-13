@@ -87,24 +87,13 @@ function report(reporter_ident, op, num, cb) {
 		let body = 'Offender: ' + name;
 		let html = ['Offender: ', safe('<b>'), name, safe('</b>')];
 
-		let img;
-		if (post.image && !post.hideimg)
-			img = image_preview(post.image);
-		if (img) {
-			body += '\nThumbnail: ' + img.src;
-			html.push(safe('<br><br><img src="'), img.src,
-				safe('" width="'), img.width,
-				safe('" height="'), img.height,
-				safe('" title="'), img.title, safe('">'));
-		}
-
 		send_report(reporter, board, op, num, body, html).then(() => cb(null), cb);
 	});
 }
 
 async function send_report(reporter, board, op, num, body, html) {
 	let noun;
-	let url = `${config.MAIL_THREAD_URL_BASE}${board}/${op}?reported`;
+	let url = `${config.REPORT_URL_BASE}${board}/${op}?reported`;
 	if (op == num) {
 		noun = 'Thread';
 	}
@@ -150,35 +139,6 @@ async function send_report(reporter, board, op, num, body, html) {
 		winston.warn(`Reporting not configured!\n${subject}\n${body}`);
 		throw new Error('Reporting not configured, sorry!');
 	}
-}
-
-function image_preview(info) {
-	if (!info.dims)
-		return;
-	// DRY
-	let tw = info.dims[2], th = info.dims[3];
-	if (info.mid) {
-		tw *= 2;
-		th *= 2;
-	}
-	if (!tw || !th) {
-		tw = info.dims[0];
-		th = info.dims[1];
-	}
-	if (!tw || !th)
-		return;
-
-	const mediaURL = config.MAIL_MEDIA_URL || require('../imager/config').MEDIA_URL;
-	let src;
-	if (info.mid)
-		src = mediaURL + '/mid/' + info.mid;
-	else if (info.realthumb || info.thumb)
-		src = mediaURL + '/thumb/' + (info.realthumb || info.thumb);
-	else
-		return;
-
-	const title = common.readable_filesize(info.size);
-	return {src, width: tw, height: th, title};
 }
 
 function maybe_mnemonic(ip) {
