@@ -5,6 +5,7 @@ module.exports = {
 	MAIL_MEDIA_URL: 'http://your.board.index/media/',
 
 	/* optional nodemailer config */
+	/*
 	SMTP: {
 		service: 'Gmail',
 		auth: {
@@ -12,6 +13,11 @@ module.exports = {
 			pass: "",
 		},
 	},
+	*/
+	/* optional; you can get this token from the BotFather */
+	TELEGRAM_TOKEN: false,
+	/* mods can sign up by DMing the bot `/register <the following password>`:
+	TELEGRAM_PASSWORD: 'bugbear',
 
 	RECAPTCHA_SITE_KEY: '',
 	RECAPTCHA_SECRET_KEY: '',

@@ -32,6 +32,7 @@
 		"winston": "2.3.0"
 	},
 	"optionalDependencies": {
+		"node-telegram-bot-api": "^0.53.0",
 		"nodemailer": "^6.4.10",
 		"send": "0.14.1"
 	}

@@ -10,6 +10,7 @@ Setup:
 * Copy hot.js.example to hot.js and configure
 * Copy imager/config.js.example to imager/config.js and configure
 * Copy report/config.js.example to report/config.js and configure
+ * SMTP and Telegram Bots are supported for report notifications
 * Clone [assets](https://github.com/lalcmellkmal/assets/) and copy the `kana` spoiler image folder as `./www/kana/` (or create your own!).
 * Run `npm install` to install npm deps and compile a few helpers
 * Run `node builder.js` to run an auto-reloading development server
@@ -39,6 +40,7 @@ Dependencies:
 
 Optional npm deps for various features:
 
+* node-telegram-bot-api for telegram reports
 * nodemailer for report emails
 * [send](https://github.com/visionmedia/send) (if you want to serve static files directly from the node.js process; useful in debug mode also)
 
