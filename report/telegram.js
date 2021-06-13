@@ -2,6 +2,7 @@ const { TELEGRAM_TOKEN, TELEGRAM_PASSWORD } = require('./config'),
     winston = require('winston');
 
 let BOT;
+const MOD_HASH = 'telegram:mods';
 
 exports.install = () => {
     const TelegramBot = require('node-telegram-bot-api');
@@ -17,7 +18,7 @@ exports.install = () => {
         }
         const r = global.redis;
         try {
-            const added = await r.promise.hset('telegram:mods', id, '0');
+            const added = await r.promise.hset(MOD_HASH, id, '0');
             BOT.sendMessage(id, added > 0 ? "You're on the list!" : "Re-registered...?");
         } catch (err) {
             winston.error('/register', id, err);
@@ -29,7 +30,7 @@ exports.install = () => {
         // This seems abuseable?
         const r = global.redis;
         try {
-            const removed = await r.promise.hdel('telegram:mods', id);
+            const removed = await r.promise.hdel(MOD_HASH, id);
             BOT.sendMessage(id, removed > 0 ? "So long~" : "You're not registered to start with!");
         } catch (err) {
             winston.error('/deregister', id, err);
@@ -45,9 +46,29 @@ exports.install = () => {
 exports.broadcastToMods = async (message) => {
     if (!BOT) throw new Error('Telegram Bot not enabled');
     const r = global.redis;
-    const mods = await r.promise.hgetall('telegram:mods');
+    const mods = await r.promise.hgetall(MOD_HASH);
+    let wasSent = false;
     for (let id in mods) {
-        // TODO if this errors, increment the error count, and possibly eject the user
-        await BOT.sendMessage(id, message);
+        let errorCount = mods[id];
+        try {
+            await BOT.sendMessage(id, message);
+            wasSent = true;
+            if (errorCount != 0) {
+                // reset the error count
+                await r.promise.hset(MOD_HASH, id, '0');
+            }
+        } catch (err) {
+            winston.warn(`Telegram to mod #${id} failed: ${err}`);
+            errorCount++;
+            if (errorCount < 3) {
+                await r.promise.hset(MOD_HASH, id, errorCount);
+            } else {
+                await r.promise.hdel(MOD_HASH, id);
+                winston.warn(`Telegram mod #${id} removed due to sendMessage errors.`);
+            }
+        }
+    }
+    if (!wasSent) {
+        winston.warn(`Telegram was not sent to anyone:\n${message}`);
     }
 };
