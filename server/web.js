@@ -17,7 +17,7 @@ const routes = [];
 const resources = [];
 
 const server = require('http').createServer((req, resp) => {
-	let ip = req.connection.remoteAddress;
+	let ip = req.socket.remoteAddress;
 	let country;
 	if (config.TRUST_X_FORWARDED_FOR)
 		ip = parse_forwarded_for(req.headers['x-forwarded-for']) || ip;
