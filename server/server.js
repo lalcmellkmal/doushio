@@ -1057,6 +1057,10 @@ function start_server() {
 			if (ff)
 				ip = ff;
 		}
+		if (config.CLOUDFLARE) {
+			ip = req.headers['cf-connecting-ip'] || ip;
+			country = req.headers['cf-ipcountry'];
+		}
 		if (!ip) {
 			winston.warn(`no ip from ${socket}`);
 			socket.close();
@@ -1074,7 +1078,11 @@ function start_server() {
 				}
 				if (ip != token.ip)
 					winston.info(`ctoken: ${ip} != ${token.ip}`);
-				country = token.cc;
+				if (token.cc && token.cc != country) {
+					if (country)
+						winston.info(`ctoken: ${country} => ${token.cc}`);
+					country = token.cc;
+				}
 			}
 			else {
 				winston.log(`ctoken: invalid from ${ip}`);
