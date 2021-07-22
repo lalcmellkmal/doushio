@@ -30,7 +30,7 @@ exports.Okyaku = Okyaku;
 const OK = Okyaku.prototype;
 
 OK.send = function (msg) {
-	this.socket.write(JSON.stringify([msg]));
+	this.socket.send(JSON.stringify([msg]));
 };
 
 OK.on_update = function (op, kind, msg) {
@@ -47,7 +47,7 @@ OK.on_update = function (op, kind, msg) {
 
 	if (this.blackhole && HOLED_UPDATES.includes(kind))
 		return;
-	this.socket.write(msg);
+	this.socket.send(msg);
 };
 
 const HOLED_UPDATES = [common.DELETE_POSTS, common.DELETE_THREAD];

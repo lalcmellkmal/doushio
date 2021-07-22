@@ -8,7 +8,7 @@ window.send = function (msg) {
 	// need deferral or reporting on these lost messages...
 	if (connSM.state != 'synced' && connSM.state != 'syncing')
 		return;
-	if (socket.readyState != SockJS.OPEN) {
+	if (socket.readyState != WebSocket.OPEN) {
 		if (console)
 			console.warn("Attempting to send while socket closed");
 		return;
@@ -67,13 +67,19 @@ function connect() {
 		window.socket = socket;
 }
 
-window.new_socket = (attempt) => {
-	const transports = ['websocket', 'xhr-streaming'];
+window.new_socket = () => {
 	let url = config.SOCKET_PATH;
 	if (typeof ctoken != 'undefined') {
 		url += '?' + $.param({ctoken});
 	}
-	return new SockJS(url, null, {transports});
+	if (url.startsWith('/')) {
+		url = new URL(url, window.location);
+		if (url.protocol == 'https:')
+			url.protocol = 'wss:';
+		if (url.protocol == 'http:')
+			url.protocol = 'ws:';
+	}
+	return new WebSocket(url);
 };
 
 connSM.act('conn, reconn + open -> syncing', () => {
@@ -157,7 +163,7 @@ function window_focused() {
 	// try to get our SM up to date if possible
 	if (s == 'synced' || s == 'syncing' || s == 'conn') {
 		const rs = socket.readyState;
-		if (rs != SockJS.OPEN && rs != SockJS.CONNECTING) {
+		if (rs != WebSocket.OPEN && rs != WebSocket.CONNECTING) {
 			connSM.feed('close');
 			return;
 		}
@@ -171,7 +177,7 @@ function window_focused() {
 }
 
 function ping() {
-	if (socket.readyState == SockJS.OPEN)
+	if (socket.readyState == WebSocket.OPEN)
 		socket.send(`[${PING}]`);
 	else if (pingTimer) {
 		clearInterval(pingTimer);

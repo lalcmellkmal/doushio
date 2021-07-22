@@ -23,7 +23,8 @@ const _ = require('../lib/underscore'),
     tripcode = require('./../tripcode/tripcode'),
     urlParse = require('url').parse,
     web = require('./web'),
-    winston = require('winston');
+    winston = require('winston'),
+    WebSocketServer = require('ws').Server;
 
 require('../admin');
 if (!imager.is_standalone())
@@ -145,7 +146,7 @@ async function synchronize(msg, client) {
 	}
 
 	logs.push(`0,${common.SYNCHRONIZE}`);
-	client.socket.write(`[[${logs.join('],[')}]]`);
+	client.socket.send(`[[${logs.join('],[')}]]`);
 	client.synced = true;
 
 	if (oneThreadOnly) {
@@ -1016,19 +1017,6 @@ setTimeout(function () {
 }, 2000);
 }
 
-function get_sockjs_script_sync() {
-	const src = fs.readFileSync('tmpl/index.html', 'UTF-8');
-	return src.match(/sockjs-[\d.]+(?:\.min)?\.js/)[0];
-}
-
-function sockjs_log(sev, message) {
-	if (message.length > 80)
-		message = message.slice(0, 60) + '[\u2026]' + message.slice(message.length - 14);
-	if (sev == 'info')
-		winston.verbose(message);
-	else if (sev == 'error')
-		winston.error(message);
-}
 if (config.DEBUG) {
 	winston.remove(winston.transports.Console);
 	winston.add(winston.transports.Console, {level: 'verbose'});
@@ -1047,24 +1035,25 @@ function start_server() {
 		fs.chmodSync(config.LISTEN_PORT, '777'); // TEMP
 	}
 
+	const ws_server = new WebSocketServer({ noServer: true });
+	web.server.on('upgrade', (req, socket, head) => {
+		const { pathname } = urlParse(req.url);
+		if (pathname == config.SOCKET_PATH) {
+			ws_server.handleUpgrade(req, socket, head, (ws) => {
+				ws_server.emit('connection', ws, req);
+			});
+		}
+		else {
+			winston.warn(`http upgrade "${encodeURI(pathname)}" discarded`);
+			socket.destroy();
+		}
+	});
 
-	const sockjsPath = 'js/' + get_sockjs_script_sync();
-	const sockOpts = {
-		sockjs_url: imager.config.MEDIA_URL + sockjsPath,
-		prefix: config.SOCKET_PATH,
-		jsessionid: false,
-		log: sockjs_log,
-		websocket: true,
-	};
-	const sockJs = require('sockjs').createServer(sockOpts);
-	web.server.on('upgrade', (req, resp) => resp.end());
-	sockJs.installHandlers(web.server);
-
-	sockJs.on('connection', (socket) => {
-		let ip = socket.remoteAddress;
+	ws_server.on('connection', (socket, req) => {
+		let ip = req.socket.remoteAddress;
 		let country;
 		if (config.TRUST_X_FORWARDED_FOR) {
-			const ff = web.parse_forwarded_for(socket.headers['x-forwarded-for']);
+			const ff = web.parse_forwarded_for(req.headers['x-forwarded-for']);
 			if (ff)
 				ip = ff;
 		}
@@ -1075,7 +1064,7 @@ function start_server() {
 		}
 
 		// parse ctoken
-		const url = urlParse(socket.url, true);
+		const url = urlParse(req.url, true);
 		if (url.query && url.query.ctoken) {
 			const token = decrypt_ctoken(url.query.ctoken);
 			if (token) {
@@ -1096,7 +1085,7 @@ function start_server() {
 		}
 
 		const client = new Okyaku(socket, ip, country);
-		socket.on('data', client.on_message.bind(client));
+		socket.on('message', client.on_message.bind(client));
 		socket.on('close', client.on_close.bind(client));
 	});
 
