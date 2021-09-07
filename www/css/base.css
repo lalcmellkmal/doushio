@@ -412,6 +412,21 @@ article, article header {
 	.full figcaption i {
 		display: block;
 	}
+
+	/* bigger box on mobile */
+	header {
+		background-size: 20px;
+	}
+	article header {
+		padding-left: 28px;
+	}
+	.popup-menu {
+		background-size: 20px;
+	}
+	.control {
+		height: 24px;
+		width: 24px;
+	}
 }
 
 section.full.floop article { float: left; clear: both; }
