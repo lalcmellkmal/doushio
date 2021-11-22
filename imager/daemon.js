@@ -288,8 +288,8 @@ test_format(first, full) {
 	let dur = /duration: (\d\d):(\d\d):(\d\d)/i.exec(full);
 	if (dur) {
 		const m = parseInt(dur[2], 10), s = parseInt(dur[3], 10);
-		if (dur[1] != '00' || m > 2)
-			throw Muggle('Video exceeds 3 minutes.');
+		if (dur[1] != '00' || m > 5)
+			throw Muggle('Video exceeds 5 minutes.');
 		dur = `${m ? m + 'm' : ''}${s}s`;
 		if (dur == '0s')
 			dur = '1s';
