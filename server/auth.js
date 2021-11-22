@@ -71,7 +71,7 @@ exports.login = function (req, resp) {
 					r.del('github:'+state, (err) => {});
 					if (/^popup:/.test(state))
 						req.popup_HACK = true;
-					verify_auth(req, resp, username);
+					verify_auth(req, resp, username.toLowerCase());
 				});
 			});
 		});
