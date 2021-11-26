@@ -216,7 +216,7 @@ class AutoRotateJob extends jobs.Job {
 		}
 		catch (err) {
 			// if it failed, keep calm and thumbnail on
-			winston.warn(`jhead: ${stderr || err}`);
+			winston.warn(`jhead: ${err}`);
 		}
 	}
 }
