@@ -97,7 +97,8 @@ h4 {
 	padding: 0;
 }
 header {
-	background: url('ui/box.png') left 3px no-repeat;
+	background: url('ui/box2x.png') left 3px no-repeat;
+	background-size: 10px;
 	margin-left: -14px;
 	padding-left: 14px;
 	position: relative;
@@ -144,7 +145,8 @@ span.control .popup-menu {
 	z-index: 10;
 }
 .popup-menu {
-	background: url('ui/box.png') 10px 10px no-repeat;
+	background: url('ui/box2x.png') 10px 10px no-repeat;
+	background-size: 10px;
 	border-bottom: none;
 	position: absolute;
 	margin: 0;
@@ -282,7 +284,8 @@ article .hat {
 	-webkit-border-radius: 4px;
 }
 .selected {
-	background: url('ui/sel.png') no-repeat center center;
+	background: url('ui/sel2x.png') no-repeat center center;
+	background-size: 35px;
 }
 .themed {
 	background-color: transparent;
