@@ -15,7 +15,7 @@ module.exports = {
 	*/
 	/* optional; you can get this token from the BotFather */
 	TELEGRAM_TOKEN: false,
-	/* mods can sign up by DMing the bot `/register <the following password>`:
+	/* mods can sign up by DMing the bot `/register <the following password>`: */
 	TELEGRAM_PASSWORD: 'bugbear',
 
 	RECAPTCHA_SITE_KEY: '',
