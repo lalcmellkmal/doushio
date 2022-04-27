@@ -48,6 +48,15 @@ _.defaults(options, {
 	lastn: config.THREAD_LAST_N,
 	inlinefit: 'width',
 });
+// figure out which theme was rendered by the server
+try {
+	const themeMatch = /(\w+)[.]css/.exec($('#theme').attr('href'));
+	const themeKey = 'board.' + BOARD + '.theme';
+	if (themeMatch && !options[themeKey])
+		options[themeKey] = themeMatch[1];
+} catch (e) {
+	console.warn('determining theme:', e);
+}
 options = new Backbone.Model(options);
 
 
