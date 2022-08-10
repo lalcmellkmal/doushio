@@ -685,7 +685,7 @@ OS.gazou_img = function (info, toppu) {
 		th = h;
 	}
 
-	let img = `<img src="${thumb}"`;
+	let img = `<img src="${thumb}" draggable="false"`;
 	if (tw && th)
 		img += ` width="${tw}" height="${th}">`;
 	else

@@ -380,7 +380,8 @@ function contract_image($img, event) {
 		contract_full_width(parent_post($img));
 	$img.replaceWith($('<img>')
 			.width($img.data('thumbWidth')).height(th)
-			.attr('src', thumb));
+			.attr('src', thumb)
+			.attr('draggable', false));
 }
 
 function expand_image($img) {
