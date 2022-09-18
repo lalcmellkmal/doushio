@@ -212,11 +212,10 @@ class AutoRotateJob extends jobs.Job {
 
 	async perform_job() {
 		try {
-			await etc.execFile(jheadBin, ['-autorot', this.src]);
+			await etc.execFile(jheadBin, ['-autorot', '-purejpg', this.src]);
 		}
 		catch (err) {
-			// if it failed, keep calm and thumbnail on
-			winston.warn(`jhead: ${err}`);
+			throw Muggle('jhead is not installed', err && err.stderr || '');
 		}
 	}
 }

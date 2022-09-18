@@ -36,7 +36,7 @@ Dependencies:
 * `npm install -g node-gyp`
 * redis
 * ffmpeg 2.2+ if supporting WebM
-* jhead and jpegtran optionally, for EXIF autorotation
+* jhead and jpegtran
 
 Optional npm deps for various features:
 
