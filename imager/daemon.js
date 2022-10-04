@@ -215,7 +215,7 @@ class AutoRotateJob extends jobs.Job {
 			await etc.execFile(jheadBin, ['-autorot', '-purejpg', this.src]);
 		}
 		catch (err) {
-			throw Muggle('jhead is not installed', err && err.stderr || '');
+			throw Muggle('could not autorotate JPEG', err && err.stderr || '');
 		}
 	}
 }
