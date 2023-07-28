@@ -4,8 +4,8 @@
 // https://m.youtube.com/watch/?v=abcdefghijk&t=2m
 // youtube.com/watch/?foo=bar&v=abcdefghijk#t=5h2s
 // >>>youtu.be/abcdefghijk
-const youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtu\.be\/|youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=)([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?([#\?]t=[\dhms]{1,9})?/;
-const youtube_time_re = /^[#\?]t=(?:(\d\d?)h)?(?:(\d{1,3})m)?(?:(\d{1,3})s?)?$/;
+const youtube_url_re = /(?:>>>*?)?(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtu\.be\/|youtube\.com\/watch\/?\?((?:[^\s#&=]+=[^\s#&]*&)*)?v=)([\w-]{11})((?:&[^\s#&=]+=[^\s#&]*)*)&?([#\?]t=[\dhms]{1,12})?/;
+const youtube_time_re = /^[#\?]t=(?:(\d\d?)h)?(?:(\d{1,3})m)?(?:(\d{1,5})s?)?$/;
 
 (function () {
 
