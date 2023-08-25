@@ -11,7 +11,7 @@
 				['OS=="linux"', {'libraries': ['-lcrypt']}],
 				['OS=="freebsd"', {'libraries': ['-lcrypt', '-liconv']}],
 				['OS=="mac"', {'libraries': ['-lcrypto', '-liconv'],
-				               'library_dirs': ['/usr/local/opt/openssl/lib']}]
+				               'library_dirs': ['/usr/local/opt/openssl/lib', '/opt/homebrew/opt/openssl/lib']}]
 			]
 		}
 	}]
